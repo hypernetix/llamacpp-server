@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+option go_package = "githum.com/hypernetix/llamacpp_server/proto";
+
+package proto;
+
+service LLMServer {
+  rpc Ping(PingRequest) returns (PingResponse) {}
+  rpc LoadModel(LoadModelRequest) returns (stream LoadModelResponse) {}
+  rpc Predict(PredictRequest) returns (stream PredictResponse) {}
+  // rpc UnloadModel(UnloadModelRequest) returns (UnloadModelResponse) {}
+  // rpc GetModelStatus(GetModelStatusRequest) returns (GetModelStatusResponse) {}
+}
+
+enum ModelStatus {
+  UNKNOWN = 0;    // Status couldn't be determined or model not found
+  LOADING = 1;    // Model is currently being loaded
+  LOADED = 2;     // Model is loaded and ready (maps to internal READY)
+  FAILED = 3;     // Model loading failed
+  // Add UNLOADING? etc. if needed later
+}
+
+enum Backend {
+  BACKEND_UNSPECIFIED = 0;
+  BACKEND_LLAMA_CPP = 1;
+  BACKEND_MLX = 2;
+  BACKEND_TF = 3;
+  BACKEND_PT = 4;
+}
+
+message PingRequest {
+}
+
+message PingResponse {
+}
+
+message LoadModelRequest {
+  string path = 1;
+  bool trust_remote_code = 2;
+  optional Backend backend = 3;
+}
+
+message LoadModelResponse {
+  float progress = 1;
+}
+
+message UnloadModelRequest {
+  string path = 1;
+}
+
+message UnloadModelResponse {
+}
+
+message PredictRequest {
+  string model = 1;
+  string prompt = 2;
+  bool stream = 3;
+  int32 max_tokens = 4;
+  float temperature = 5;
+  float top_p = 6;
+  int32 top_k = 7;
+  message Options {
+  	optional float min_p = 1;             
+    optional int32 min_tokens_to_keep = 2;
+    optional int32 max_kv_size = 3;
+    optional int32 prefill_step_size = 4;
+    optional int32 kv_bits = 5;
+    optional int32 kv_group_size = 6;
+    optional int32 quantized_kv_start = 7;
+    optional float repetition_penalty = 8;
+    optional float length_penalty = 9;
+    optional float diversity_penalty = 10;
+    optional int32 no_repeat_ngram_size = 11;
+    optional int32 random_seed = 12;
+  }
+  Options options = 8;
+}
+
+message PredictResponse {
+  bytes message = 1;
+  int32 token = 2;
+  int32 tokens = 3;
+}
+
+message GetModelStatusRequest {
+  string path = 1;
+}
+
+message GetModelStatusResponse {
+  string path = 1;
+  ModelStatus status = 2;
+  float progress = 3;
+}
+
+message ListModelsRequest {
+}
+
+message ListModelsResponse {
+}
