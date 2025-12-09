@@ -85,6 +85,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget unzip
       
+      # Step 5b: Install dependencies (macOS)
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # Install libomp for OpenMP support (required by llama.cpp CGO bindings)
+          brew install libomp
+          # Show where libomp is installed for debugging
+          brew --prefix libomp
+      
       # Step 6: Cache llama.cpp binaries
       - name: Cache llama.cpp binaries
         uses: actions/cache@v4
@@ -151,6 +160,7 @@ jobs:
             cmd/inferencetest2/inferencetest2*
             !cmd/**/*.dll
             !cmd/**/*.so*
+            !cmd/**/*.dylib
           retention-days: 7
       
       # Step 16: Upload logs on failure

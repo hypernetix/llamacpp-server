@@ -33,7 +33,9 @@ package llamacppbindings
 #cgo darwin LDFLAGS: -lllama -lggml -lggml-base -lggml-cpu
 #cgo LDFLAGS: -lm -lstdc++
 #cgo linux LDFLAGS: -lgomp
-#cgo darwin LDFLAGS: -lomp
+// macOS: libomp from Homebrew - search both Apple Silicon and Intel paths
+#cgo darwin LDFLAGS: -L/opt/homebrew/opt/libomp/lib -L/usr/local/opt/libomp/lib -lomp
+#cgo darwin CPPFLAGS: -I/opt/homebrew/opt/libomp/include -I/usr/local/opt/libomp/include
 
 #include <stdlib.h>
 #include "llama.h"

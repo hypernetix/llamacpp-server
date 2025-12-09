@@ -40,6 +40,20 @@ pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-tools-git
 # Add to PATH: C:\msys64\mingw64\bin
 ```
 
+### macOS-specific Setup
+
+Install Homebrew and required dependencies:
+```bash
+# Install Homebrew (if not already installed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install libomp (required for OpenMP support in llama.cpp)
+brew install libomp
+
+# Install Go (if not already installed)
+brew install go
+```
+
 ## Build System
 
 ### Main Targets
@@ -197,6 +211,7 @@ rpc Ping(PingRequest) returns (PingResponse);
 
 - **Apple Silicon (M1/M2/M3/M4)**: Metal backend enabled automatically
 - **Intel Macs**: CPU-only by default
+- **libomp**: Required for OpenMP support - install with `brew install libomp`
 
 #### Linux
 
@@ -228,6 +243,22 @@ $env:PATH += ";$PWD\build\llama-binaries\lib"
 Ensure `make prepare` completed successfully and import libraries were created:
 ```bash
 ls build/llama-binaries/lib/*.a  # Should show .dll.a files on Windows
+```
+
+### macOS: "library not found for -lomp"
+
+Install OpenMP via Homebrew:
+```bash
+brew install libomp
+```
+
+### macOS: Library loading errors at runtime
+
+Ensure the library path includes the llama.cpp libraries:
+```bash
+# The Makefile handles this automatically, but for manual runs:
+export DYLD_LIBRARY_PATH=$PWD/build/llama-binaries/lib:$DYLD_LIBRARY_PATH
+./cmd/grpcserver/grpcserver --port 50052
 ```
 
 ### Updating llama.cpp Version

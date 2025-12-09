@@ -145,6 +145,10 @@ build: build-grpcserver build-grpcclienttest build-inferencetest1 build-inferenc
 check-deps:
 ifeq ($(OS),Windows_NT)
 	@$(PS) "if (-not (Get-Command gendef -ErrorAction SilentlyContinue)) { Write-Warning 'gendef not found. Install: pacman -S mingw-w64-x86_64-tools-git' }"
+else ifeq ($(DETECTED_OS),Darwin)
+	@command -v brew >/dev/null 2>&1 || { echo "Error: Homebrew not found. Install from https://brew.sh"; exit 1; }
+	@command -v go >/dev/null 2>&1 || { echo "Error: go not found. Install with: brew install go"; exit 1; }
+	@[ -d "$$(brew --prefix libomp 2>/dev/null)" ] || { echo "Error: libomp not found. Install with: brew install libomp"; exit 1; }
 else
 	@command -v wget >/dev/null 2>&1 || { echo "Error: wget not found. Install with: sudo apt install wget"; exit 1; }
 	@command -v unzip >/dev/null 2>&1 || { echo "Error: unzip not found. Install with: sudo apt install unzip"; exit 1; }
@@ -205,11 +209,22 @@ else
 	-chmod +x $(LLAMA_DIR)/bin/* 2>/dev/null || true
 	@# macOS dylib handling
 	-mv $(LLAMA_DIR)/*.dylib $(LLAMA_DIR)/lib/ 2>/dev/null || true
-	@# Create symlinks for library compatibility (ggml-cpu-x64 -> ggml-cpu)
+	@# Create symlinks for library compatibility
 	@echo "Creating library symlinks for compatibility..."
+	@# Linux: ggml-cpu-x64 -> ggml-cpu
 	@if [ -f "$(LLAMA_DIR)/lib/libggml-cpu-x64.so" ] && [ ! -f "$(LLAMA_DIR)/lib/libggml-cpu.so" ]; then \
 		ln -sf libggml-cpu-x64.so $(LLAMA_DIR)/lib/libggml-cpu.so; \
 		echo "  Created symlink: libggml-cpu.so -> libggml-cpu-x64.so"; \
+	fi
+	@# macOS arm64: ggml-cpu-arm64 -> ggml-cpu
+	@if [ -f "$(LLAMA_DIR)/lib/libggml-cpu-arm64.dylib" ] && [ ! -f "$(LLAMA_DIR)/lib/libggml-cpu.dylib" ]; then \
+		ln -sf libggml-cpu-arm64.dylib $(LLAMA_DIR)/lib/libggml-cpu.dylib; \
+		echo "  Created symlink: libggml-cpu.dylib -> libggml-cpu-arm64.dylib"; \
+	fi
+	@# macOS x64: ggml-cpu-x64 -> ggml-cpu (Intel Macs)
+	@if [ -f "$(LLAMA_DIR)/lib/libggml-cpu-x64.dylib" ] && [ ! -f "$(LLAMA_DIR)/lib/libggml-cpu.dylib" ]; then \
+		ln -sf libggml-cpu-x64.dylib $(LLAMA_DIR)/lib/libggml-cpu.dylib; \
+		echo "  Created symlink: libggml-cpu.dylib -> libggml-cpu-x64.dylib"; \
 	fi
 endif
 	@echo "Copying headers from source archive..."
@@ -286,6 +301,7 @@ ifeq ($(OS),Windows_NT)
 else
 	@echo "Copying shared libraries to cmd/grpcserver/..."
 	@cp -f $(LLAMA_DIR)/lib/*.so* cmd/grpcserver/ 2>/dev/null || true
+	@cp -f $(LLAMA_DIR)/lib/*.dylib cmd/grpcserver/ 2>/dev/null || true
 endif
 
 copy-dlls-grpcclienttest:
@@ -295,6 +311,7 @@ ifeq ($(OS),Windows_NT)
 else
 	@echo "Copying shared libraries to cmd/grpcclienttest/..."
 	@cp -f $(LLAMA_DIR)/lib/*.so* cmd/grpcclienttest/ 2>/dev/null || true
+	@cp -f $(LLAMA_DIR)/lib/*.dylib cmd/grpcclienttest/ 2>/dev/null || true
 endif
 
 copy-dlls-inferencetest1:
@@ -304,6 +321,7 @@ ifeq ($(OS),Windows_NT)
 else
 	@echo "Copying shared libraries to cmd/inferencetest1/..."
 	@cp -f $(LLAMA_DIR)/lib/*.so* cmd/inferencetest1/ 2>/dev/null || true
+	@cp -f $(LLAMA_DIR)/lib/*.dylib cmd/inferencetest1/ 2>/dev/null || true
 endif
 
 copy-dlls-inferencetest2:
@@ -313,6 +331,7 @@ ifeq ($(OS),Windows_NT)
 else
 	@echo "Copying shared libraries to cmd/inferencetest2/..."
 	@cp -f $(LLAMA_DIR)/lib/*.so* cmd/inferencetest2/ 2>/dev/null || true
+	@cp -f $(LLAMA_DIR)/lib/*.dylib cmd/inferencetest2/ 2>/dev/null || true
 endif
 
 # =============================================================================
@@ -334,7 +353,12 @@ RUN_ENV_GRPCSERVER := $(RUN_ENV)
 RUN_ENV_GRPCCLIENTTEST := $(RUN_ENV)
 RUN_ENV_INFERENCETEST1 := $(RUN_ENV)
 RUN_ENV_INFERENCETEST2 := $(RUN_ENV)
-ifneq ($(OS),Windows_NT)
+ifeq ($(DETECTED_OS),Darwin)
+    RUN_ENV_GRPCSERVER := DYLD_LIBRARY_PATH=$(CURDIR)/cmd/grpcserver:$(CURDIR)/$(LLAMA_DIR)/lib:$$DYLD_LIBRARY_PATH
+    RUN_ENV_GRPCCLIENTTEST := DYLD_LIBRARY_PATH=$(CURDIR)/cmd/grpcclienttest:$(CURDIR)/$(LLAMA_DIR)/lib:$$DYLD_LIBRARY_PATH
+    RUN_ENV_INFERENCETEST1 := DYLD_LIBRARY_PATH=$(CURDIR)/cmd/inferencetest1:$(CURDIR)/$(LLAMA_DIR)/lib:$$DYLD_LIBRARY_PATH
+    RUN_ENV_INFERENCETEST2 := DYLD_LIBRARY_PATH=$(CURDIR)/cmd/inferencetest2:$(CURDIR)/$(LLAMA_DIR)/lib:$$DYLD_LIBRARY_PATH
+else ifneq ($(OS),Windows_NT)
     RUN_ENV_GRPCSERVER := LD_LIBRARY_PATH=$(CURDIR)/cmd/grpcserver:$(CURDIR)/$(LLAMA_DIR)/lib:$$LD_LIBRARY_PATH
     RUN_ENV_GRPCCLIENTTEST := LD_LIBRARY_PATH=$(CURDIR)/cmd/grpcclienttest:$(CURDIR)/$(LLAMA_DIR)/lib:$$LD_LIBRARY_PATH
     RUN_ENV_INFERENCETEST1 := LD_LIBRARY_PATH=$(CURDIR)/cmd/inferencetest1:$(CURDIR)/$(LLAMA_DIR)/lib:$$LD_LIBRARY_PATH
@@ -397,6 +421,10 @@ else
 	-rm -f cmd/grpcclienttest/*.so* 2>/dev/null || true
 	-rm -f cmd/inferencetest1/*.so* 2>/dev/null || true
 	-rm -f cmd/inferencetest2/*.so* 2>/dev/null || true
+	-rm -f cmd/grpcserver/*.dylib 2>/dev/null || true
+	-rm -f cmd/grpcclienttest/*.dylib 2>/dev/null || true
+	-rm -f cmd/inferencetest1/*.dylib 2>/dev/null || true
+	-rm -f cmd/inferencetest2/*.dylib 2>/dev/null || true
 endif
 	@echo "Clean complete."
 
