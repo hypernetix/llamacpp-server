@@ -100,12 +100,41 @@ jobs:
         id: llama-cache
         with:
           path: build/llama-binaries
-          key: llama-${{ runner.os }}-${{ runner.arch }}-${{ env.LLAMA_VERSION }}
+          # Cache key includes version suffix to invalidate on Makefile changes
+          key: llama-v2-${{ runner.os }}-${{ runner.arch }}-${{ env.LLAMA_VERSION }}
       
       # Step 7: Download and prepare llama.cpp binaries
       - name: Prepare llama.cpp binaries
         if: steps.llama-cache.outputs.cache-hit != 'true'
         run: make prepare
+      
+      # Step 7b: Recreate symlinks (needed even on cache hit, symlinks may not be preserved)
+      - name: Recreate library symlinks
+        if: runner.os != 'Windows'
+        run: |
+          cd build/llama-binaries/lib
+          echo "=== Library files in lib/ ==="
+          ls -la
+          echo ""
+          echo "=== Creating symlinks for library compatibility ==="
+          # Linux: ggml-cpu-x64 -> ggml-cpu
+          if [ -f "libggml-cpu-x64.so" ] && [ ! -e "libggml-cpu.so" ]; then
+            ln -sf libggml-cpu-x64.so libggml-cpu.so
+            echo "Created symlink: libggml-cpu.so -> libggml-cpu-x64.so"
+          fi
+          # macOS arm64: ggml-cpu-arm64 -> ggml-cpu
+          if [ -f "libggml-cpu-arm64.dylib" ] && [ ! -e "libggml-cpu.dylib" ]; then
+            ln -sf libggml-cpu-arm64.dylib libggml-cpu.dylib
+            echo "Created symlink: libggml-cpu.dylib -> libggml-cpu-arm64.dylib"
+          fi
+          # macOS x64: ggml-cpu-x64 -> ggml-cpu
+          if [ -f "libggml-cpu-x64.dylib" ] && [ ! -e "libggml-cpu.dylib" ]; then
+            ln -sf libggml-cpu-x64.dylib libggml-cpu.dylib
+            echo "Created symlink: libggml-cpu.dylib -> libggml-cpu-x64.dylib"
+          fi
+          echo ""
+          echo "=== Final library files ==="
+          ls -la
       
       # Step 8: Build all Go binaries
       - name: Build

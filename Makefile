@@ -194,21 +194,21 @@ ifeq ($(OS),Windows_NT)
 	-$(PS) "Move-Item -Path '$(LLAMA_DIR)/*.dll' -Destination '$(LLAMA_DIR)/lib/' -Force -ErrorAction SilentlyContinue"
 	-$(PS) "Move-Item -Path '$(LLAMA_DIR)/*.lib' -Destination '$(LLAMA_DIR)/lib/' -Force -ErrorAction SilentlyContinue"
 else
-	@# Ubuntu archive extracts to build/bin/ subfolder - handle both cases
+	@# Linux/macOS archives may extract to build/bin/ subfolder - handle both cases
 	@if [ -d "$(LLAMA_DIR)/build/bin" ]; then \
 		echo "Moving files from nested build/bin/ structure..."; \
 		mv $(LLAMA_DIR)/build/bin/llama-* $(LLAMA_DIR)/bin/ 2>/dev/null || true; \
 		mv $(LLAMA_DIR)/build/bin/rpc-server $(LLAMA_DIR)/bin/ 2>/dev/null || true; \
 		mv $(LLAMA_DIR)/build/bin/*.so* $(LLAMA_DIR)/lib/ 2>/dev/null || true; \
+		mv $(LLAMA_DIR)/build/bin/*.dylib $(LLAMA_DIR)/lib/ 2>/dev/null || true; \
 		mv $(LLAMA_DIR)/build/bin/LICENSE* $(LLAMA_DIR)/ 2>/dev/null || true; \
 		rm -rf $(LLAMA_DIR)/build; \
 	else \
 		mv $(LLAMA_DIR)/llama-*[!.zip] $(LLAMA_DIR)/bin/ 2>/dev/null || true; \
 		mv $(LLAMA_DIR)/*.so* $(LLAMA_DIR)/lib/ 2>/dev/null || true; \
+		mv $(LLAMA_DIR)/*.dylib $(LLAMA_DIR)/lib/ 2>/dev/null || true; \
 	fi
 	-chmod +x $(LLAMA_DIR)/bin/* 2>/dev/null || true
-	@# macOS dylib handling
-	-mv $(LLAMA_DIR)/*.dylib $(LLAMA_DIR)/lib/ 2>/dev/null || true
 	@# Create symlinks for library compatibility
 	@echo "Creating library symlinks for compatibility..."
 	@# Linux: ggml-cpu-x64 -> ggml-cpu
