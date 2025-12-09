@@ -1,0 +1,184 @@
+name: CI
+
+# When to run this workflow
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+# Cancel previous runs if a new push/PR comes in
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Environment variables for all jobs
+env:
+  GO_VERSION: '1.22'
+  LLAMA_VERSION: b6770
+  # Small test model for CI (~95MB) - SmolLM2-135M-Instruct Q4_K_M
+  TEST_MODEL_URL: https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct-GGUF/resolve/main/smollm2-135m-instruct-q4_k_m.gguf
+  TEST_MODEL_NAME: smollm2-135m-instruct-q4_k_m.gguf
+
+# Define the jobs
+jobs:
+  # Job 1: Build and test on all platforms
+  build-and-test:
+    name: Build & Test (${{ matrix.os }})
+    
+    # Matrix strategy: run on multiple OS
+    strategy:
+      fail-fast: false  # Continue testing other OS even if one fails
+      matrix:
+        include:
+          # Linux
+          - os: ubuntu-22.04
+            
+          # Windows
+          - os: windows-2022
+            
+          # macOS (Intel)
+          - os: macos-13
+            
+          # macOS (Apple Silicon M1/M2)
+          - os: macos-14
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      # Step 1: Check out the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Step 2: Set up Go
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+      
+      # Step 3: Set up MSYS2 for CGO (Windows only)
+      - name: Set up MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-tools-git
+      
+      # Step 4: Add MSYS2 to PATH (Windows only)
+      - name: Add MSYS2 to PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      
+      # Step 5: Install dependencies (Linux)
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+      
+      # Step 6: Cache llama.cpp binaries
+      - name: Cache llama.cpp binaries
+        uses: actions/cache@v4
+        id: llama-cache
+        with:
+          path: build/llama-binaries
+          key: llama-${{ runner.os }}-${{ runner.arch }}-${{ env.LLAMA_VERSION }}
+      
+      # Step 7: Download and prepare llama.cpp binaries
+      - name: Prepare llama.cpp binaries
+        if: steps.llama-cache.outputs.cache-hit != 'true'
+        run: make prepare
+      
+      # Step 8: Build all Go binaries
+      - name: Build
+        run: make build
+      
+      # Step 9: Run Go unit tests
+      - name: Run Go unit tests
+        run: go test -v ./...
+      
+      # Step 10: Cache test model
+      - name: Cache test model
+        uses: actions/cache@v4
+        id: model-cache
+        with:
+          path: models/${{ env.TEST_MODEL_NAME }}
+          key: test-model-${{ env.TEST_MODEL_NAME }}
+      
+      # Step 11: Download test model (if not cached)
+      - name: Download test model
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p models
+          echo "Downloading test model: ${{ env.TEST_MODEL_NAME }} (~95MB)..."
+          curl -L --retry 3 --retry-delay 5 -o "models/${{ env.TEST_MODEL_NAME }}" "${{ env.TEST_MODEL_URL }}"
+          ls -la models/
+      
+      # Step 12: Run inference test 1
+      - name: Run inference test 1
+        run: make run-inferencetest1 MODEL_PATH=models/${{ env.TEST_MODEL_NAME }}
+        timeout-minutes: 5
+      
+      # Step 13: Run inference test 2
+      - name: Run inference test 2
+        run: make run-inferencetest2 MODEL_PATH=models/${{ env.TEST_MODEL_NAME }}
+        timeout-minutes: 5
+      
+      # Step 14: Run gRPC client test
+      - name: Run gRPC client test
+        run: make run-grpcclienttest MODEL_PATH=models/${{ env.TEST_MODEL_NAME }}
+        timeout-minutes: 5
+      
+      # Step 15: Upload build artifacts
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            cmd/grpcserver/grpcserver*
+            cmd/grpcclienttest/grpcclienttest*
+            cmd/inferencetest1/inferencetest1*
+            cmd/inferencetest2/inferencetest2*
+            !cmd/**/*.dll
+            !cmd/**/*.so*
+          retention-days: 7
+      
+      # Step 16: Upload logs on failure
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            build/
+            cmd/*/*.log
+          retention-days: 7
+
+  # Job 2: Summary job (runs after all builds complete)
+  ci-success:
+    name: CI Success
+    needs: [build-and-test]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Check build results
+        run: |
+          if [ "${{ needs.build-and-test.result }}" != "success" ]; then
+            echo "❌ Build and test failed on one or more platforms"
+            exit 1
+          fi
+          echo "✅ All builds and tests passed!"
