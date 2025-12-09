@@ -42,9 +42,6 @@ jobs:
           # Windows
           - os: windows-2022
             
-          # macOS (Intel)
-          - os: macos-13
-            
           # macOS (Apple Silicon M1/M2)
           - os: macos-14
     
