@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hypernetix/llamacpp_server/api/proto"
 	llamacppbindings "github.com/hypernetix/llamacpp_server/internal/bindings"
 	llamacppgrpcserver "github.com/hypernetix/llamacpp_server/internal/grpcserver"
 	"github.com/hypernetix/llamacpp_server/internal/logging"
-	"github.com/hypernetix/llamacpp_server/internal/proto"
 
 	flags "github.com/jessevdk/go-flags"
 	"google.golang.org/grpc"

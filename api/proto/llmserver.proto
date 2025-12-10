@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "githum.com/hypernetix/llamacpp_server/proto";
+option go_package = "githum.com/hypernetix/llamacpp_server/api/proto";
 
 package proto;
 

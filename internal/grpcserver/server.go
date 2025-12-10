@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hypernetix/llamacpp_server/api/proto"
 	"github.com/hypernetix/llamacpp_server/internal/logging"
 	"github.com/hypernetix/llamacpp_server/internal/modelmanagement"
-	"github.com/hypernetix/llamacpp_server/internal/proto"
 )
 
 type GlobalOptions struct {

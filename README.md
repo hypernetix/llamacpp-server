@@ -121,6 +121,8 @@ make LLAMA_VERSION=b6800 all
 │       ├── bin/             # llama.cpp executables
 │       ├── lib/             # DLLs/shared libraries + import libs
 │       └── include/         # Header files
+├── api/
+│   └── proto/               # Protocol buffer definitions
 ├── cmd/
 │   ├── grpcserver/          # gRPC server application
 │   ├── grpcclienttest/      # gRPC client test
@@ -130,8 +132,7 @@ make LLAMA_VERSION=b6800 all
     ├── bindings/            # CGO bindings to llama.cpp
     ├── grpcserver/          # gRPC server implementation
     ├── logging/             # Logging utilities
-    ├── modelmanagement/     # Model loading and caching
-    └── proto/               # Protocol buffer definitions
+    └── modelmanagement/     # Model loading and caching
 ```
 
 ## Usage
@@ -164,7 +165,7 @@ make run-grpcclienttest MODEL_PATH=/path/to/model.gguf
 
 ## API Documentation
 
-The gRPC server implements the interface defined in `internal/proto/llmserver.proto`:
+The gRPC server implements the interface defined in `api/proto/llmserver.proto`:
 
 ### LoadModel
 
@@ -217,64 +218,6 @@ rpc Ping(PingRequest) returns (PingResponse);
 
 - **CUDA**: Detected automatically if `nvcc` is available
 - **Vulkan**: Binary download uses Vulkan build for cross-vendor GPU support
-
-## Troubleshooting
-
-### Windows: "gendef not found"
-
-Install MinGW-w64 tools via MSYS2:
-```bash
-pacman -S mingw-w64-x86_64-tools-git
-```
-
-### Windows: DLL not found at runtime
-
-The run targets automatically copy DLLs. For manual execution:
-```powershell
-# Option 1: Copy DLLs to executable directory
-copy build\llama-binaries\lib\*.dll cmd\grpcserver\
-
-# Option 2: Add lib directory to PATH
-$env:PATH += ";$PWD\build\llama-binaries\lib"
-```
-
-### Build errors: undefined reference to llama_*
-
-Ensure `make prepare` completed successfully and import libraries were created:
-```bash
-ls build/llama-binaries/lib/*.a  # Should show .dll.a files on Windows
-```
-
-### macOS: "library not found for -lomp"
-
-Install OpenMP via Homebrew:
-```bash
-brew install libomp
-```
-
-### macOS: Library loading errors at runtime
-
-Ensure the library path includes the llama.cpp libraries:
-```bash
-# The Makefile handles this automatically, but for manual runs:
-export DYLD_LIBRARY_PATH=$PWD/build/llama-binaries/lib:$DYLD_LIBRARY_PATH
-./cmd/grpcserver/grpcserver --port 50052
-```
-
-### Updating llama.cpp Version
-
-```bash
-# Clean and rebuild with new version
-make clean
-make LLAMA_VERSION=b6800 all
-```
-
-## Performance Tips
-
-1. **Use GPU layers**: When running, configure `-ngl` to offload layers to GPU
-2. **Optimize threads**: Don't over-provision CPU threads
-3. **Use quantized models**: Q4 or Q5 models are faster with minimal quality loss
-4. **Match backend**: Use CUDA for NVIDIA GPUs, Metal for Apple Silicon
 
 ## License
 

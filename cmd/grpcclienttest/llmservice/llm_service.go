@@ -6,8 +6,8 @@ import (
 	"io"
 	"sync"
 
+	"github.com/hypernetix/llamacpp_server/api/proto"
 	"github.com/hypernetix/llamacpp_server/internal/logging"
-	"github.com/hypernetix/llamacpp_server/internal/proto"
 
 	"github.com/phayes/freeport"
 	"google.golang.org/grpc"
