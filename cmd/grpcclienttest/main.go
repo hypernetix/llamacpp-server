@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -56,6 +57,17 @@ func main() {
 	if opts.ModelPath == "" {
 		fmt.Println("Model path is required")
 		os.Exit(1)
+	}
+
+	// Convert model path to absolute path (needed when server runs in different working directory)
+	modelPath := opts.ModelPath
+	if !filepath.IsAbs(modelPath) {
+		absPath, err := filepath.Abs(modelPath)
+		if err != nil {
+			fmt.Printf("Failed to get absolute path for model: %v\n", err)
+			os.Exit(1)
+		}
+		modelPath = absPath
 	}
 
 	logger.Infof("Starting LLM service...")
@@ -133,9 +145,9 @@ func main() {
 			}
 		}()
 
-		logger.Infof("Loading model from '%s'...", opts.ModelPath)
+		logger.Infof("Loading model from '%s'...", modelPath)
 
-		err = llmService.LoadModel(ctx, opts.ModelPath, progressChan)
+		err = llmService.LoadModel(ctx, modelPath, progressChan)
 		if err != nil {
 			logger.Errorf("Failed to load model: %v", err)
 			os.Exit(1)
@@ -159,7 +171,7 @@ func main() {
 		// Deterministic greedy sampling
 		logger.Infof("Running GREEDY test mode (deterministic)")
 		predictRequest = llmservice.PredictRequest{
-			ModelName:         opts.ModelPath,
+			ModelName:         modelPath,
 			Message:           prompt,
 			MaxTokens:         opts.MaxTokens,
 			Temperature:       0.0, // Greedy
@@ -180,7 +192,7 @@ func main() {
 		// Randomized but reproducible sampling
 		logger.Infof("Running SEEDED test mode (reproducible randomized)")
 		predictRequest = llmservice.PredictRequest{
-			ModelName:         opts.ModelPath,
+			ModelName:         modelPath,
 			Message:           prompt,
 			MaxTokens:         opts.MaxTokens,
 			Temperature:       opts.Temperature,
@@ -196,7 +208,7 @@ func main() {
 		// Stress test with longer generation
 		logger.Infof("Running STRESS test mode (performance testing)")
 		predictRequest = llmservice.PredictRequest{
-			ModelName:         opts.ModelPath,
+			ModelName:         modelPath,
 			Message:           "Write a detailed explanation of machine learning concepts, including supervised learning, unsupervised learning, and neural networks. Include examples and applications.",
 			MaxTokens:         500, // Longer generation
 			Temperature:       opts.Temperature,
@@ -214,7 +226,7 @@ func main() {
 		// Use command line parameters as-is
 		logger.Infof("Running BASELINE test mode (configurable parameters)")
 		predictRequest = llmservice.PredictRequest{
-			ModelName:         opts.ModelPath,
+			ModelName:         modelPath,
 			Message:           prompt,
 			MaxTokens:         opts.MaxTokens,
 			Temperature:       opts.Temperature,
@@ -232,7 +244,7 @@ func main() {
 	// Log the final configuration
 	logger.Infof("=== TEST CONFIGURATION ===")
 	logger.Infof("Test Mode: %s", opts.TestMode)
-	logger.Infof("Model: %s", opts.ModelPath)
+	logger.Infof("Model: %s", modelPath)
 	logger.Infof("Prompt: %s", prompt)
 	logger.Infof("Parameters:")
 	logger.Infof("  - temperature: %.3f", predictRequest.Temperature)
