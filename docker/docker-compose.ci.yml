@@ -52,7 +52,7 @@ services:
     volumes:
       - model-data:/models:ro
     environment:
-      - LD_LIBRARY_PATH=/app/lib
+      - LD_LIBRARY_PATH=/app
       - MODEL_NAME=${MODEL_NAME:-SmolLM2-135M-Instruct-Q4_K_M.gguf}
     command: ["--port", "50051"]
     healthcheck:

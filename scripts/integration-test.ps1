@@ -53,9 +53,9 @@ function Write-Err { Write-Host "[ERROR] $args" -ForegroundColor Red }
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 
-# CI defaults
-$CIModelUrl = "https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct-GGUF/resolve/main/smollm2-135m-instruct-q4_k_m.gguf"
-$CIModelName = "smollm2-135m-instruct-q4_k_m.gguf"
+# CI defaults (SmolLM2-135M from bartowski)
+$CIModelUrl = "https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf"
+$CIModelName = "SmolLM2-135M-Instruct-Q4_K_M.gguf"
 
 # Change to project root
 Push-Location $ProjectRoot

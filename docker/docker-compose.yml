@@ -34,7 +34,7 @@ services:
       # Mount host's MODEL_PATH to fixed container path
       - ${MODEL_PATH:?MODEL_PATH is required}:/models/model.gguf:ro
     environment:
-      - LD_LIBRARY_PATH=/app/lib
+      - LD_LIBRARY_PATH=/app
     command: ["--port", "50051"]
     healthcheck:
       # Simple TCP health check (gRPC port is open)
@@ -84,6 +84,6 @@ services:
     volumes:
       - ${MODEL_PATH:?MODEL_PATH is required}:/models/model.gguf:ro
     environment:
-      - LD_LIBRARY_PATH=/app/lib
+      - LD_LIBRARY_PATH=/app
     command: ["--port", "50051"]
     restart: unless-stopped

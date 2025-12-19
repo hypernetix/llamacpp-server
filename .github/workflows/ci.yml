@@ -150,7 +150,8 @@ jobs:
         id: model-cache
         with:
           path: models/${{ env.TEST_MODEL_NAME }}
-          key: test-model-${{ env.TEST_MODEL_NAME }}
+          # Version suffix (v2) to invalidate old cache when model URL/name changes
+          key: test-model-v2-${{ env.TEST_MODEL_NAME }}
       
       # Step 11: Download test model (if not cached)
       - name: Download test model
@@ -228,7 +229,8 @@ jobs:
         id: docker-model-cache
         with:
           path: /tmp/test-model
-          key: docker-test-model-${{ env.TEST_MODEL_NAME }}
+          # Version suffix (v2) to invalidate old cache when model URL/name changes
+          key: docker-test-model-v2-${{ env.TEST_MODEL_NAME }}
       
       - name: Download test model (if not cached)
         if: steps.docker-model-cache.outputs.cache-hit != 'true'
@@ -247,13 +249,15 @@ jobs:
             --load \
             .
           docker buildx build -f docker/Dockerfile.client -t llamacpp-client:ci \
+            --build-arg LLAMA_VERSION=${{ env.LLAMA_VERSION }} \
             --load \
             .
       
       - name: Run Docker integration test
         run: |
           chmod +x scripts/integration-test.sh
-          ./scripts/integration-test.sh --model "/tmp/test-model/${{ env.TEST_MODEL_NAME }}" --verbose
+          # Use IMAGE_TAG=ci to match the pre-built images
+          IMAGE_TAG=ci ./scripts/integration-test.sh --model "/tmp/test-model/${{ env.TEST_MODEL_NAME }}" --verbose
         timeout-minutes: 10
       
       - name: Move cache

@@ -36,9 +36,9 @@ FORCE_BUILD=false
 VERBOSE=false
 COMPOSE_FILE="docker/docker-compose.yml"
 
-# CI defaults
-CI_MODEL_URL="https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct-GGUF/resolve/main/smollm2-135m-instruct-q4_k_m.gguf"
-CI_MODEL_NAME="smollm2-135m-instruct-q4_k_m.gguf"
+# CI defaults (SmolLM2-135M from bartowski)
+CI_MODEL_URL="https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf"
+CI_MODEL_NAME="SmolLM2-135M-Instruct-Q4_K_M.gguf"
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
