@@ -43,6 +43,7 @@ type LLMService interface {
 
 type LLMServiceOptions struct {
 	ServerPath string
+	AttachHost string
 	AttachPort int
 }
 
@@ -75,7 +76,11 @@ func NewLlamacppLLMService(options LLMServiceOptions, logger logging.SprintfLogg
 		}
 	}
 
-	address := fmt.Sprintf("127.0.0.1:%d", port)
+	host := options.AttachHost
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	address := fmt.Sprintf("%s:%d", host, port)
 
 	logger.Debugf("Dialing server process at %s", address)
 

@@ -21,6 +21,7 @@ import (
 )
 
 type flagOptions struct {
+	Host       string `long:"host" default:"127.0.0.1" description:"host address to bind (use 0.0.0.0 for Docker)"`
 	Port       string `long:"port" default:"50051" description:"port to listen for gRPC server"`
 	NGpuLayers int    `long:"ngpu" default:"99" description:"number of GPU layers"`
 	UseMmap    bool   `long:"mmap" description:"use mmap"`
@@ -43,9 +44,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", opts.Host, port))
 	if err != nil {
-		fmt.Printf("Failed to listen at port %d: %v", port, err)
+		fmt.Printf("Failed to listen at %s:%d: %v", opts.Host, port, err)
 		os.Exit(1)
 	}
 

@@ -1,0 +1,92 @@
+# Docker Compose for CI integration tests
+# Downloads the test model automatically
+#
+# Usage:
+#   docker compose -f docker/docker-compose.ci.yml up --build --abort-on-container-exit
+#
+# This compose file:
+# 1. Downloads the test model (SmolLM2-135M) in an init container
+# 2. Starts the gRPC server with the model
+# 3. Runs the client test with deterministic (greedy) settings
+# 4. Exits with the client's exit code
+
+services:
+  # Init container: Download test model
+  # Uses alpine with curl (runs as root) to avoid volume permission issues
+  model-downloader:
+    image: alpine:latest
+    container_name: model-downloader
+    volumes:
+      - model-data:/models
+    environment:
+      # Using bartowski's SmolLM2 model (small, fast for testing)
+      - MODEL_URL=${MODEL_URL:-https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf}
+      - MODEL_NAME=${MODEL_NAME:-SmolLM2-135M-Instruct-Q4_K_M.gguf}
+    command: >
+      sh -c '
+        apk add --no-cache curl > /dev/null 2>&1 &&
+        if [ -f "/models/$${MODEL_NAME}" ]; then
+          echo "Model already exists: /models/$${MODEL_NAME}"
+          ls -la /models/
+        else
+          echo "Downloading model: $${MODEL_NAME}..."
+          curl -L --retry 3 --retry-delay 5 -o "/models/$${MODEL_NAME}" "$${MODEL_URL}"
+          echo "Download complete:"
+          ls -la /models/
+        fi
+      '
+    restart: "no"
+
+  # gRPC Server
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.server
+      args:
+        LLAMA_VERSION: ${LLAMA_VERSION:-b6770}
+    image: llamacpp-server:${IMAGE_TAG:-ci}
+    container_name: llamacpp-server-ci
+    depends_on:
+      model-downloader:
+        condition: service_completed_successfully
+    volumes:
+      - model-data:/models:ro
+    environment:
+      - LD_LIBRARY_PATH=/app/lib
+      - MODEL_NAME=${MODEL_NAME:-SmolLM2-135M-Instruct-Q4_K_M.gguf}
+    command: ["--port", "50051"]
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/50051' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: "no"
+
+  # gRPC Client Test
+  client:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.client
+      args:
+        LLAMA_VERSION: ${LLAMA_VERSION:-b6770}
+    image: llamacpp-client:${IMAGE_TAG:-ci}
+    container_name: llamacpp-client-ci
+    depends_on:
+      server:
+        condition: service_healthy
+    # Use greedy sampling for deterministic results
+    # Note: --model path is the path INSIDE THE SERVER container (via gRPC LoadModel)
+    command: >
+      --host server
+      --port 50051
+      --model /models/${MODEL_NAME:-SmolLM2-135M-Instruct-Q4_K_M.gguf}
+      --test-mode greedy
+      --temperature 0
+      --max-tokens 50
+    restart: "no"
+
+volumes:
+  model-data:
+    driver: local
+

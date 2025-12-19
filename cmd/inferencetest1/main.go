@@ -24,7 +24,11 @@ func main() {
 	}
 	fmt.Printf("Model architecture: %s\n", arch)
 
-	prompt := "What is a capital of USA?"
+	// Use SmolLM2/ChatML format for compatibility with chat models
+	// This format works with SmolLM2, and other ChatML-based models
+	// Raw prompt would work for base models but chat models need this format
+	prompt := "<|im_start|>user\nWhat is the capital of USA?<|im_end|>\n<|im_start|>assistant\n"
+
 	nPredict := 32 // generate 32 tokens
 
 	logger := logging.NewSprintfLogger()

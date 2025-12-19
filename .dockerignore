@@ -1,0 +1,61 @@
+# Build artifacts
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Binary files in cmd directories
+cmd/grpcserver/grpcserver
+cmd/grpcserver/grpcserver.exe
+cmd/grpcserver/*.dll
+cmd/grpcserver/*.so*
+cmd/grpcserver/*.dylib
+
+cmd/grpcclienttest/grpcclienttest
+cmd/grpcclienttest/grpcclienttest.exe
+cmd/grpcclienttest/*.dll
+cmd/grpcclienttest/*.so*
+cmd/grpcclienttest/*.dylib
+
+cmd/inferencetest1/inferencetest1
+cmd/inferencetest1/inferencetest1.exe
+cmd/inferencetest1/*.dll
+cmd/inferencetest1/*.so*
+cmd/inferencetest1/*.dylib
+
+cmd/inferencetest2/inferencetest2
+cmd/inferencetest2/inferencetest2.exe
+cmd/inferencetest2/*.dll
+cmd/inferencetest2/*.so*
+cmd/inferencetest2/*.dylib
+
+# Models
+models/
+*.gguf
+
+# Git
+.git/
+.gitignore
+
+# GitHub
+.github/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker (don't include Dockerfiles in build context)
+# Actually we need docker/ for the Dockerfile.server/client
+# So only ignore docker compose output
+docker-compose.override.yml
+
+# Logs
+*.log
+
+# Test artifacts
+*.test
+coverage.out
+

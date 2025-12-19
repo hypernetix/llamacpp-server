@@ -1,0 +1,78 @@
+# Multi-stage Dockerfile for llamacpp gRPC server
+# Builds a portable Docker image with llama.cpp bindings
+#
+# Uses the project Makefile for consistent build process
+#
+# Build: docker build -f docker/Dockerfile.server -t llamacpp-server .
+# Run:   docker run -p 50051:50051 -v /path/to/models:/models llamacpp-server
+
+# =============================================================================
+# Stage 1: Download llama.cpp binaries and build Go binary using Makefile
+# =============================================================================
+FROM golang:1.22-bookworm AS builder
+
+# Install build dependencies (same as Makefile's check-deps for Linux)
+RUN apt-get update && apt-get install -y \
+    make \
+    wget \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy Go module files first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Use Makefile to prepare llama.cpp binaries
+ARG LLAMA_VERSION=b6770
+ENV LLAMA_VERSION=${LLAMA_VERSION}
+RUN make prepare LLAMA_VERSION=${LLAMA_VERSION}
+
+# Build the gRPC server using Makefile
+RUN make build-grpcserver
+
+# =============================================================================
+# Stage 2: Runtime image
+# =============================================================================
+FROM debian:bookworm-slim AS runtime
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libgomp1 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the binary
+COPY --from=builder /app/cmd/grpcserver/grpcserver /app/
+
+# Copy ALL shared libraries from the lib directory
+COPY --from=builder /app/build/llama-binaries/lib/ /app/
+
+# Create symlinks if needed
+RUN if [ -f "/app/libggml-cpu-x64.so" ] && [ ! -e "/app/libggml-cpu.so" ]; then \
+        ln -sf libggml-cpu-x64.so /app/libggml-cpu.so; \
+    fi
+
+# Register libraries with ldconfig so they can be found at runtime
+# This is more reliable than LD_LIBRARY_PATH for the dynamic linker
+RUN echo "/app" > /etc/ld.so.conf.d/llamacpp.conf && ldconfig
+
+# Also set LD_LIBRARY_PATH as backup
+ENV LD_LIBRARY_PATH="/app"
+
+# Create models directory
+RUN mkdir -p /models
+
+# Expose gRPC port
+EXPOSE 50051
+
+# Run the server
+# --host 0.0.0.0 is required for Docker networking
+ENTRYPOINT ["/app/grpcserver", "--host", "0.0.0.0"]
+CMD ["--port", "50051"]

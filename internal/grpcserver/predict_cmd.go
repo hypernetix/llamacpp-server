@@ -292,9 +292,8 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 				cmd.logger.Errorf("Do: Streaming callback failed: %v", err)
 				return "", fmt.Errorf("streaming callback failed: %w", err)
 			}
-		} else {
-			response += piece
 		}
+		response += piece
 
 		generatedTokens++
 
@@ -314,7 +313,7 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 	cmd.logger.Infof("Do: Generation time: %.2fs", generationTime.Seconds())
 	cmd.logger.Infof("Do: Total time: %.2fs", totalTime.Seconds())
 	cmd.logger.Infof("Do: Throughput: %.2f tokens/second", throughput)
-	cmd.logger.Infof("Do: Context usage: %d/%d (%.1f%%)",
+	cmd.logger.Infof("Do: Context usage: %d/%d (%.1f%%%%)",
 		context.NCellsUsed(), context.NCells(),
 		float64(context.NCellsUsed())/float64(context.NCells())*100)
 	cmd.logger.Debugf("Do: Final response: %q", response)

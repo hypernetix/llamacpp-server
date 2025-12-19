@@ -22,8 +22,8 @@ env:
   GO_VERSION: '1.22'
   LLAMA_VERSION: b6770
   # Small test model for CI (~95MB) - SmolLM2-135M-Instruct Q4_K_M
-  TEST_MODEL_URL: https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct-GGUF/resolve/main/smollm2-135m-instruct-q4_k_m.gguf
-  TEST_MODEL_NAME: smollm2-135m-instruct-q4_k_m.gguf
+  TEST_MODEL_URL: https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf
+  TEST_MODEL_NAME: SmolLM2-135M-Instruct-Q4_K_M.gguf
 
 # Define the jobs
 jobs:
@@ -203,10 +203,78 @@ jobs:
             cmd/*/*.log
           retention-days: 7
 
-  # Job 2: Summary job (runs after all builds complete)
+  # Job 2: Docker integration test
+  docker-integration-test:
+    name: Docker Integration Test
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      
+      - name: Cache test model (Docker)
+        uses: actions/cache@v4
+        id: docker-model-cache
+        with:
+          path: /tmp/test-model
+          key: docker-test-model-${{ env.TEST_MODEL_NAME }}
+      
+      - name: Download test model (if not cached)
+        if: steps.docker-model-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/test-model
+          echo "Downloading test model: ${{ env.TEST_MODEL_NAME }} (~95MB)..."
+          curl -L --retry 3 --retry-delay 5 -o "/tmp/test-model/${{ env.TEST_MODEL_NAME }}" "${{ env.TEST_MODEL_URL }}"
+          ls -la /tmp/test-model/
+      
+      - name: Build Docker images
+        run: |
+          docker buildx build -f docker/Dockerfile.server -t llamacpp-server:ci \
+            --build-arg LLAMA_VERSION=${{ env.LLAMA_VERSION }} \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
+            --load \
+            .
+          docker buildx build -f docker/Dockerfile.client -t llamacpp-client:ci \
+            --load \
+            .
+      
+      - name: Run Docker integration test
+        run: |
+          chmod +x scripts/integration-test.sh
+          ./scripts/integration-test.sh --model "/tmp/test-model/${{ env.TEST_MODEL_NAME }}" --verbose
+        timeout-minutes: 10
+      
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
+      
+      - name: Upload Docker logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-logs-${{ github.sha }}
+          path: |
+            docker/
+            scripts/
+          retention-days: 7
+
+  # Job 3: Summary job (runs after all builds complete)
   ci-success:
     name: CI Success
-    needs: [build-and-test]
+    needs: [build-and-test, docker-integration-test]
     runs-on: ubuntu-latest
     if: always()
     
@@ -215,6 +283,10 @@ jobs:
         run: |
           if [ "${{ needs.build-and-test.result }}" != "success" ]; then
             echo "❌ Build and test failed on one or more platforms"
+            exit 1
+          fi
+          if [ "${{ needs.docker-integration-test.result }}" != "success" ]; then
+            echo "❌ Docker integration test failed"
             exit 1
           fi
           echo "✅ All builds and tests passed!"

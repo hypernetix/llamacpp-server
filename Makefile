@@ -122,6 +122,8 @@ endif
 .PHONY: build-grpcserver build-grpcclienttest build-inferencetest1 build-inferencetest2
 .PHONY: run-grpcserver run-grpcclienttest run-inferencetest1 run-inferencetest2
 .PHONY: copy-dlls-grpcserver copy-dlls-grpcclienttest copy-dlls-inferencetest1 copy-dlls-inferencetest2
+.PHONY: docker-build docker-build-server docker-build-client
+.PHONY: docker-integration-test docker-integration-test-ci docker-clean
 
 all: prepare build
 	@echo ""
@@ -455,12 +457,21 @@ help:
 	@echo "  make run-inferencetest1 MODEL_PATH=<path>    - Run inference test 1"
 	@echo "  make run-inferencetest2 MODEL_PATH=<path>    - Run inference test 2"
 	@echo ""
+	@echo "Docker targets:"
+	@echo "  make docker-build                            - Build all Docker images"
+	@echo "  make docker-build-server                     - Build server Docker image"
+	@echo "  make docker-build-client                     - Build client Docker image"
+	@echo "  make docker-integration-test MODEL_PATH=<path> - Run integration test with local model"
+	@echo "  make docker-integration-test-ci              - Run integration test (downloads model)"
+	@echo "  make docker-clean                            - Remove Docker images and volumes"
+	@echo ""
 	@echo "Configuration variables:"
 	@echo "  LLAMA_VERSION  	- llama.cpp version (default: $(LLAMA_VERSION))"
 	@echo "  GRPC_PORT      	- gRPC server port (default: $(GRPC_PORT))"
 	@echo "  ATTACH_GRPC_PORT 	- gRPC client test port (default: $(ATTACH_GRPC_PORT))"
 	@echo "  GRPC_SERVER_PATH 	- Path to gRPC server executable (default: $(GRPC_SERVER_PATH))"
 	@echo "  MODEL_PATH     	- Path to GGUF model file"
+	@echo "  DOCKER_NO_CACHE	- Set to 1 to disable Docker build cache"
 	@echo ""
 	@echo "Detected environment:"
 	@echo "  OS: $(DETECTED_OS)"
@@ -472,3 +483,65 @@ help:
 	@echo "  make run-grpcserver GRPC_PORT=50053"
 	@echo "  make run-grpcclienttest MODEL_PATH=/path/to/model.gguf"
 	@echo "  make LLAMA_VERSION=b6800 prepare"
+	@echo "  make docker-integration-test MODEL_PATH=/path/to/model.gguf"
+	@echo "  make docker-integration-test-ci"
+	@echo "  make docker-build DOCKER_NO_CACHE=1"
+
+# =============================================================================
+# Docker Targets
+# =============================================================================
+
+# Default Docker image tag
+IMAGE_TAG ?= latest
+
+# Docker build options (set DOCKER_NO_CACHE=1 to disable cache)
+ifdef DOCKER_NO_CACHE
+    DOCKER_BUILD_FLAGS := --no-cache
+else
+    DOCKER_BUILD_FLAGS :=
+endif
+
+docker-build: docker-build-server docker-build-client
+	@echo ""
+	@echo "=== All Docker images built ==="
+
+docker-build-server:
+	@echo "Building gRPC server Docker image..."
+	docker build -f docker/Dockerfile.server -t llamacpp-server:$(IMAGE_TAG) \
+		--build-arg LLAMA_VERSION=$(LLAMA_VERSION) $(DOCKER_BUILD_FLAGS) .
+
+docker-build-client:
+	@echo "Building gRPC client Docker image..."
+	docker build -f docker/Dockerfile.client -t llamacpp-client:$(IMAGE_TAG) \
+		--build-arg LLAMA_VERSION=$(LLAMA_VERSION) $(DOCKER_BUILD_FLAGS) .
+
+docker-integration-test:
+ifeq ($(MODEL_PATH),)
+	@echo "Error: MODEL_PATH is required"
+	@echo "Usage: make docker-integration-test MODEL_PATH=/path/to/model.gguf"
+	@exit 1
+endif
+	@echo ""
+	@echo "=== Running Docker Integration Test ==="
+	@echo "Model: $(MODEL_PATH)"
+ifeq ($(OS),Windows_NT)
+	powershell -ExecutionPolicy Bypass -File scripts/integration-test.ps1 -Model "$(MODEL_PATH)"
+else
+	./scripts/integration-test.sh --model "$(MODEL_PATH)"
+endif
+
+docker-integration-test-ci:
+	@echo ""
+	@echo "=== Running Docker Integration Test (CI mode) ==="
+ifeq ($(OS),Windows_NT)
+	powershell -ExecutionPolicy Bypass -File scripts/integration-test.ps1 -CI
+else
+	./scripts/integration-test.sh --ci
+endif
+
+docker-clean:
+	@echo "Cleaning up Docker resources..."
+	-docker compose -f docker/docker-compose.yml down -v --remove-orphans 2>/dev/null || true
+	-docker compose -f docker/docker-compose.ci.yml down -v --remove-orphans 2>/dev/null || true
+	-docker rmi llamacpp-server:$(IMAGE_TAG) llamacpp-client:$(IMAGE_TAG) 2>/dev/null || true
+	@echo "Docker cleanup complete."

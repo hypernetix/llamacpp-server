@@ -17,6 +17,7 @@ import (
 type flagOptions struct {
 	ModelPath     string  `long:"model" description:"path to the model file"`
 	ServerPath    string  `long:"server" description:"path to the server executable"`
+	AttachHost    string  `long:"host" description:"host address to attach to (default: 127.0.0.1)" default:"127.0.0.1"`
 	AttachPort    int     `long:"port" description:"port to attach to the server"`
 	Temperature   float64 `long:"temperature" description:"sampling temperature" default:"0.7"`
 	TopP          float64 `long:"top-p" description:"top-p sampling" default:"1.0"`
@@ -61,13 +62,14 @@ func main() {
 
 	llmServiceOptions := llmservice.LLMServiceOptions{
 		ServerPath: opts.ServerPath,
+		AttachHost: opts.AttachHost,
 		AttachPort: opts.AttachPort,
 	}
 
 	llmService, err := llmservice.NewLlamacppLLMService(llmServiceOptions, logger)
 	if err != nil {
 		logger.Errorf("Failed to create LLM service: %v", err)
-		return
+		os.Exit(1)
 	}
 
 	shutdown := func() {
@@ -108,7 +110,7 @@ func main() {
 
 	if err != nil {
 		logger.Errorf("Failed to ping LLM server: %v", err)
-		return
+		os.Exit(1)
 	}
 
 	{
@@ -136,7 +138,7 @@ func main() {
 		err = llmService.LoadModel(ctx, opts.ModelPath, progressChan)
 		if err != nil {
 			logger.Errorf("Failed to load model: %v", err)
-			return
+			os.Exit(1)
 		}
 
 		wg.Wait()
@@ -144,7 +146,10 @@ func main() {
 		logger.Infof("Model loaded")
 	}
 
-	prompt := "What is the capital of USA?"
+	// Use SmolLM2/ChatML format for compatibility with chat models
+	// This format works with SmolLM2, and other ChatML-based models
+	// Raw prompt would work for base models but chat models need this format
+	prompt := "<|im_start|>user\nWhat is the capital of USA?<|im_end|>\n<|im_start|>assistant\n"
 
 	// Configure test parameters based on command line options and test mode
 	var predictRequest llmservice.PredictRequest
@@ -285,7 +290,7 @@ func main() {
 		err := llmService.Predict(ctx, predictRequest, predictResponseChan)
 		if err != nil {
 			logger.Errorf("Failed to predict: %v", err)
-			return
+			os.Exit(1)
 		}
 
 		wg.Wait()

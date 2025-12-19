@@ -1,0 +1,74 @@
+# Multi-stage Dockerfile for llamacpp gRPC client test
+# Used for integration testing against a remote gRPC server
+#
+# Uses the project Makefile for consistent build process
+#
+# Build: docker build -f docker/Dockerfile.client -t llamacpp-client .
+# Run:   docker run --network host llamacpp-client --host server --port 50051 --model /models/model.gguf
+
+# =============================================================================
+# Stage 1: Build Go binary using Makefile
+# =============================================================================
+FROM golang:1.22-bookworm AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    make \
+    wget \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy Go module files first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# The client needs llama.cpp binaries because it shares code with bindings
+# Use Makefile to prepare them
+ARG LLAMA_VERSION=b6770
+ENV LLAMA_VERSION=${LLAMA_VERSION}
+RUN make prepare LLAMA_VERSION=${LLAMA_VERSION}
+
+# Build the client test binary using Makefile
+RUN make build-grpcclienttest
+
+# =============================================================================
+# Stage 2: Runtime image
+# =============================================================================
+FROM debian:bookworm-slim AS runtime
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the binary
+COPY --from=builder /app/cmd/grpcclienttest/grpcclienttest /app/
+
+# Copy ALL shared libraries from the lib directory
+COPY --from=builder /app/build/llama-binaries/lib/ /app/
+
+# Create symlinks if needed
+RUN if [ -f "/app/libggml-cpu-x64.so" ] && [ ! -e "/app/libggml-cpu.so" ]; then \
+        ln -sf libggml-cpu-x64.so /app/libggml-cpu.so; \
+    fi
+
+# Register libraries with ldconfig
+RUN echo "/app" > /etc/ld.so.conf.d/llamacpp.conf && ldconfig
+
+# Also set LD_LIBRARY_PATH as backup
+ENV LD_LIBRARY_PATH="/app"
+
+# Create models directory (for model path reference)
+RUN mkdir -p /models
+
+# Default entry point - connect to server
+ENTRYPOINT ["/app/grpcclienttest"]
+CMD ["--help"]
