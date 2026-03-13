@@ -29,9 +29,19 @@ type PredictCommandArgs struct {
 	RandomSeed        int
 }
 
-func NewPredictFunc(logger logging.SprintfLogger) PredictFunc {
+type PredictOptions struct {
+	FlashAttn     bool
+	NParallel     int
+	NThreads      int
+	NThreadsBatch int
+	CtxSize       int
+	BatchSize     int
+}
+
+func NewPredictFunc(options PredictOptions, logger logging.SprintfLogger) PredictFunc {
 	cmd := &predictCmd{
-		logger: logger.With("module", "predictCmd"),
+		options: options,
+		logger:  logger.With("module", "predictCmd"),
 	}
 	return cmd.Do
 }
@@ -39,7 +49,8 @@ func NewPredictFunc(logger logging.SprintfLogger) PredictFunc {
 type PredictFunc func(model *llamacppbindings.Model, prompt string, args PredictCommandArgs, stream PredictCommandStreamFunc) (string, error)
 
 type predictCmd struct {
-	logger logging.SprintfLogger
+	options PredictOptions
+	logger  logging.SprintfLogger
 }
 
 func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args PredictCommandArgs, stream PredictCommandStreamFunc) (string, error) {
@@ -56,15 +67,28 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 	cmd.logger.Infof("Do: Vocabulary - type: %d, tokens: %d, add_bos: %v",
 		vocabInfo.Type, nVocab, vocab.AddBOS())
 
-	// Set up context with improved parameters
-	contextParams := llamacppbindings.NewContextDefaultParams()
-	contextParams.SetNCtx(4096)       // Larger context window
-	contextParams.SetNBatch(2048)     // Larger batch size for better performance
-	contextParams.SetNThreads(0)      // Auto-detect threads
-	contextParams.SetNThreadsBatch(0) // Auto-detect batch threads
+	ctxSize := cmd.options.CtxSize
+	if ctxSize <= 0 {
+		ctxSize = 4096
+	}
+	batchSize := cmd.options.BatchSize
+	if batchSize <= 0 {
+		batchSize = 2048
+	}
 
-	cmd.logger.Infof("Do: Creating context - ctx_size: %d, batch_size: %d",
-		contextParams.NCtx(), contextParams.NBatch())
+	contextParams := llamacppbindings.NewContextDefaultParams()
+	contextParams.SetNCtx(ctxSize)
+	contextParams.SetNBatch(batchSize)
+	contextParams.SetNThreads(cmd.options.NThreads)
+	contextParams.SetNThreadsBatch(cmd.options.NThreadsBatch)
+
+	if cmd.options.FlashAttn {
+		contextParams.SetFlashAttention(true)
+		cmd.logger.Infof("Do: Flash attention enabled")
+	}
+
+	cmd.logger.Infof("Do: Creating context - ctx_size: %d, batch_size: %d, threads: %d, threads_batch: %d",
+		contextParams.NCtx(), contextParams.NBatch(), contextParams.NThreads(), contextParams.NThreadsBatch())
 
 	context, err := llamacppbindings.NewContext(model, contextParams)
 	if err != nil {

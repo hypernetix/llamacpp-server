@@ -12,6 +12,7 @@
 # Run targets:
 #   make run-grpcserver      - Run the gRPC server
 #   make run-grpcclienttest  - Run the gRPC client test
+#   make run-paralleltest    - Run the parallel inference test
 #   make run-inferencetest1  - Run inference test 1
 #   make run-inferencetest2  - Run inference test 2
 
@@ -20,7 +21,8 @@
 # =============================================================================
 
 # llama.cpp version to download (can be overridden: make LLAMA_VERSION=b6770)
-LLAMA_VERSION ?= b6770
+# Check out for the latest release here: https://github.com/ggml-org/llama.cpp/releases
+LLAMA_VERSION ?= b8292
 
 # Build directories (use forward slashes - works everywhere)
 BUILD_DIR := build
@@ -120,7 +122,7 @@ endif
 .PHONY: all prepare build clean help check-deps
 .PHONY: download-binaries import-libs
 .PHONY: build-grpcserver build-grpcclienttest build-inferencetest1 build-inferencetest2
-.PHONY: run-grpcserver run-grpcclienttest run-inferencetest1 run-inferencetest2
+.PHONY: run-grpcserver run-grpcclienttest run-paralleltest run-inferencetest1 run-inferencetest2
 .PHONY: copy-dlls-grpcserver copy-dlls-grpcclienttest copy-dlls-inferencetest1 copy-dlls-inferencetest2
 .PHONY: docker-build docker-build-server docker-build-client
 .PHONY: docker-integration-test docker-integration-test-ci docker-clean
@@ -382,6 +384,20 @@ endif
 	@echo "=== Running gRPC Client Test ==="
 	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/grpcclienttest/grpcclienttest$(EXE) --port $(ATTACH_GRPC_PORT) --server "$(GRPC_SERVER_PATH)" --model "$(MODEL_PATH)"
 
+# Default parallel count for parallel test
+PARALLEL_N ?= 4
+
+run-paralleltest: build-grpcclienttest copy-dlls-grpcclienttest copy-dlls-grpcserver
+ifeq ($(MODEL_PATH),)
+	@echo "Error: MODEL_PATH is required"
+	@echo "Usage: make run-paralleltest MODEL_PATH=/path/to/model.gguf"
+	@echo "       make run-paralleltest MODEL_PATH=/path/to/model.gguf PARALLEL_N=8"
+	@exit 1
+endif
+	@echo ""
+	@echo "=== Running Parallel Inference Test ($(PARALLEL_N) concurrent requests) ==="
+	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/grpcclienttest/grpcclienttest$(EXE) --port $(ATTACH_GRPC_PORT) --server "$(GRPC_SERVER_PATH)" --model "$(MODEL_PATH)" --test-mode parallel --parallel-n $(PARALLEL_N)
+
 run-inferencetest1: build-inferencetest1 copy-dlls-inferencetest1
 ifeq ($(MODEL_PATH),)
 	@echo "Error: MODEL_PATH is required"
@@ -454,6 +470,7 @@ help:
 	@echo "Run targets:"
 	@echo "  make run-grpcserver                          - Run gRPC server"
 	@echo "  make run-grpcclienttest MODEL_PATH=<path>    - Run client test"
+	@echo "  make run-paralleltest MODEL_PATH=<path>      - Run parallel inference test"
 	@echo "  make run-inferencetest1 MODEL_PATH=<path>    - Run inference test 1"
 	@echo "  make run-inferencetest2 MODEL_PATH=<path>    - Run inference test 2"
 	@echo ""
@@ -471,6 +488,7 @@ help:
 	@echo "  ATTACH_GRPC_PORT 	- gRPC client test port (default: $(ATTACH_GRPC_PORT))"
 	@echo "  GRPC_SERVER_PATH 	- Path to gRPC server executable (default: $(GRPC_SERVER_PATH))"
 	@echo "  MODEL_PATH     	- Path to GGUF model file"
+	@echo "  PARALLEL_N     	- Number of concurrent requests for parallel test (default: 4)"
 	@echo "  DOCKER_NO_CACHE	- Set to 1 to disable Docker build cache"
 	@echo ""
 	@echo "Detected environment:"
@@ -482,6 +500,7 @@ help:
 	@echo "  make all"
 	@echo "  make run-grpcserver GRPC_PORT=50053"
 	@echo "  make run-grpcclienttest MODEL_PATH=/path/to/model.gguf"
+	@echo "  make run-paralleltest MODEL_PATH=/path/to/model.gguf PARALLEL_N=8"
 	@echo "  make LLAMA_VERSION=b6800 prepare"
 	@echo "  make docker-integration-test MODEL_PATH=/path/to/model.gguf"
 	@echo "  make docker-integration-test-ci"

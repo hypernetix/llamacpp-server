@@ -19,11 +19,17 @@ type predictionsManager struct {
 	closed      bool
 	mx          sync.Mutex
 	wg          sync.WaitGroup
+	sem         chan struct{} // concurrency limiter; nil means unlimited
 }
 
-func NewPredictionsManager(predictFunc PredictFunc) PredictionsManager {
+func NewPredictionsManager(predictFunc PredictFunc, nParallel int) PredictionsManager {
+	var sem chan struct{}
+	if nParallel > 0 {
+		sem = make(chan struct{}, nParallel)
+	}
 	return &predictionsManager{
 		predictFunc: predictFunc,
+		sem:         sem,
 	}
 }
 
@@ -43,6 +49,12 @@ func (m *predictionsManager) Predict(model *llamacppbindings.Model, prompt strin
 		return "", err
 	}
 	defer m.wg.Done()
+
+	if m.sem != nil {
+		m.sem <- struct{}{}
+		defer func() { <-m.sem }()
+	}
+
 	return m.predictFunc(model, prompt, options, stream)
 }
 

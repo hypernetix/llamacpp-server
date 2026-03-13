@@ -10,7 +10,8 @@ import (
 )
 
 type GlobalOptions struct {
-	Model LoadModelOptions
+	Model   LoadModelOptions
+	Predict PredictOptions
 }
 
 type LLMServer struct {
@@ -23,8 +24,8 @@ type LLMServer struct {
 func NewLLMServer(opts GlobalOptions, logger logging.SprintfLogger) *LLMServer {
 	loadModelFunc := NewLoadModelFunc(opts.Model, logger)
 	modelManager := modelmanagement.NewModelManager(loadModelFunc, logger)
-	predictFunc := NewPredictFunc(logger)
-	predictionManager := NewPredictionsManager(predictFunc)
+	predictFunc := NewPredictFunc(opts.Predict, logger)
+	predictionManager := NewPredictionsManager(predictFunc, opts.Predict.NParallel)
 	return &LLMServer{
 		modelManager:      modelManager,
 		predictionManager: predictionManager,

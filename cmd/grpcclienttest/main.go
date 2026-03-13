@@ -27,7 +27,8 @@ type flagOptions struct {
 	MinP          float64 `long:"min-p" description:"min-p sampling" default:"0.05"`
 	RandomSeed    int     `long:"seed" description:"random seed for reproducible results (-1 for random)" default:"-1"`
 	MaxTokens     int     `long:"max-tokens" description:"maximum tokens to generate" default:"100"`
-	TestMode      string  `long:"test-mode" description:"test mode: baseline, greedy, seeded, or stress" default:"baseline"`
+	TestMode      string  `long:"test-mode" description:"test mode: baseline, greedy, seeded, stress, or parallel" default:"baseline"`
+	ParallelN     int     `long:"parallel-n" description:"number of concurrent requests for parallel test mode" default:"4"`
 }
 
 // Helper functions for pointer creation
@@ -158,29 +159,33 @@ func main() {
 		logger.Infof("Model loaded")
 	}
 
-	// Use SmolLM2/ChatML format for compatibility with chat models
-	// This format works with SmolLM2, and other ChatML-based models
-	// Raw prompt would work for base models but chat models need this format
+	if opts.TestMode == "parallel" {
+		runParallelTest(ctx, llmService, modelPath, opts, logger)
+	} else {
+		runSingleTest(ctx, llmService, modelPath, opts, logger)
+	}
+
+	logger.Infof("Done")
+}
+
+func runSingleTest(ctx context.Context, llmService llmservice.LLMService, modelPath string, opts flagOptions, logger logging.SprintfLogger) {
 	prompt := "<|im_start|>user\nWhat is the capital of USA?<|im_end|>\n<|im_start|>assistant\n"
 
-	// Configure test parameters based on command line options and test mode
 	var predictRequest llmservice.PredictRequest
 
 	switch opts.TestMode {
 	case "greedy":
-		// Deterministic greedy sampling
 		logger.Infof("Running GREEDY test mode (deterministic)")
 		predictRequest = llmservice.PredictRequest{
 			ModelName:         modelPath,
 			Message:           prompt,
 			MaxTokens:         opts.MaxTokens,
-			Temperature:       0.0, // Greedy
+			Temperature:       0.0,
 			Stream:            true,
 			TopP:              Float64Ptr(1.0),
 			TopK:              IntPtr(0),
 			RepetitionPenalty: Float64Ptr(opts.RepeatPenalty),
 		}
-		// Only add min_p if explicitly specified and not default
 		if opts.MinP != 0.05 {
 			predictRequest.MinP = Float64Ptr(opts.MinP)
 		}
@@ -189,7 +194,6 @@ func main() {
 		}
 
 	case "seeded":
-		// Randomized but reproducible sampling
 		logger.Infof("Running SEEDED test mode (reproducible randomized)")
 		predictRequest = llmservice.PredictRequest{
 			ModelName:         modelPath,
@@ -201,16 +205,15 @@ func main() {
 			TopK:              IntPtr(opts.TopK),
 			MinP:              Float64Ptr(opts.MinP),
 			RepetitionPenalty: Float64Ptr(opts.RepeatPenalty),
-			RandomSeed:        IntPtr(12345), // Fixed seed for reproducibility
+			RandomSeed:        IntPtr(12345),
 		}
 
 	case "stress":
-		// Stress test with longer generation
 		logger.Infof("Running STRESS test mode (performance testing)")
 		predictRequest = llmservice.PredictRequest{
 			ModelName:         modelPath,
 			Message:           "Write a detailed explanation of machine learning concepts, including supervised learning, unsupervised learning, and neural networks. Include examples and applications.",
-			MaxTokens:         500, // Longer generation
+			MaxTokens:         500,
 			Temperature:       opts.Temperature,
 			Stream:            true,
 			TopP:              Float64Ptr(opts.TopP),
@@ -223,7 +226,6 @@ func main() {
 		}
 
 	default: // "baseline"
-		// Use command line parameters as-is
 		logger.Infof("Running BASELINE test mode (configurable parameters)")
 		predictRequest = llmservice.PredictRequest{
 			ModelName:         modelPath,
@@ -241,7 +243,6 @@ func main() {
 		}
 	}
 
-	// Log the final configuration
 	logger.Infof("=== TEST CONFIGURATION ===")
 	logger.Infof("Test Mode: %s", opts.TestMode)
 	logger.Infof("Model: %s", modelPath)
@@ -268,57 +269,185 @@ func main() {
 	}
 	logger.Infof("==========================")
 
-	{
-		logger.Infof("Predicting...")
+	logger.Infof("Predicting...")
 
-		wg := sync.WaitGroup{}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	predictResponseChan := make(chan llmservice.PredictResponse)
+	defer close(predictResponseChan)
+
+	startTime := time.Now()
+
+	fullResponse := ""
+	var tokenCount int
+
+	go func() {
+		defer wg.Done()
+
+		for predictResponse := range predictResponseChan {
+			fmt.Printf("Predict response: %+v\n", predictResponse)
+
+			fullResponse += predictResponse.Message
+			if predictResponse.Tokens > 0 {
+				tokenCount = int(predictResponse.Tokens)
+			}
+
+			if predictResponse.Done {
+				break
+			}
+		}
+	}()
+
+	err := llmService.Predict(ctx, predictRequest, predictResponseChan)
+	if err != nil {
+		logger.Errorf("Failed to predict: %v", err)
+		os.Exit(1)
+	}
+
+	wg.Wait()
+
+	generationTime := time.Since(startTime)
+	throughput := float64(tokenCount) / generationTime.Seconds()
+
+	logger.Infof("=== PERFORMANCE RESULTS ===")
+	logger.Infof("Total tokens: %d", tokenCount)
+	logger.Infof("Generation time: %.2fs", generationTime.Seconds())
+	logger.Infof("Throughput: %.2f tokens/second", throughput)
+	logger.Infof("Full response: %s", fullResponse)
+	logger.Infof("================================")
+
+	logger.Infof("Predict done")
+}
+
+type parallelResult struct {
+	index    int
+	prompt   string
+	response string
+	tokens   int
+	err      error
+	duration time.Duration
+}
+
+func runParallelTest(ctx context.Context, llmService llmservice.LLMService, modelPath string, opts flagOptions, logger logging.SprintfLogger) {
+	nParallel := opts.ParallelN
+	if nParallel < 2 {
+		nParallel = 2
+	}
+
+	prompts := []string{
+		"<|im_start|>user\nWhat is the capital of France?<|im_end|>\n<|im_start|>assistant\n",
+		"<|im_start|>user\nWhat is 2+2?<|im_end|>\n<|im_start|>assistant\n",
+		"<|im_start|>user\nName a color of the sky.<|im_end|>\n<|im_start|>assistant\n",
+		"<|im_start|>user\nWhat is the largest planet in our solar system?<|im_end|>\n<|im_start|>assistant\n",
+		"<|im_start|>user\nWhat year did World War II end?<|im_end|>\n<|im_start|>assistant\n",
+		"<|im_start|>user\nHow many continents are there?<|im_end|>\n<|im_start|>assistant\n",
+		"<|im_start|>user\nWhat is the chemical symbol for water?<|im_end|>\n<|im_start|>assistant\n",
+		"<|im_start|>user\nWho wrote Romeo and Juliet?<|im_end|>\n<|im_start|>assistant\n",
+	}
+
+	maxTokens := opts.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = 50
+	}
+
+	logger.Infof("=== PARALLEL TEST CONFIGURATION ===")
+	logger.Infof("Concurrent requests: %d", nParallel)
+	logger.Infof("Max tokens per request: %d", maxTokens)
+	logger.Infof("Model: %s", modelPath)
+	logger.Infof("===================================")
+
+	results := make([]parallelResult, nParallel)
+	var wg sync.WaitGroup
+
+	logger.Infof("Launching %d concurrent prediction requests...", nParallel)
+	startTime := time.Now()
+
+	for i := 0; i < nParallel; i++ {
 		wg.Add(1)
-
-		predictResponseChan := make(chan llmservice.PredictResponse)
-		defer close(predictResponseChan)
-
-		startTime := time.Now()
-
-		fullResponse := ""
-		var tokenCount int
-
-		go func() {
+		go func(idx int) {
 			defer wg.Done()
 
-			for predictResponse := range predictResponseChan {
-				fmt.Printf("Predict response: %+v\n", predictResponse)
+			prompt := prompts[idx%len(prompts)]
+			reqStart := time.Now()
 
-				fullResponse += predictResponse.Message
-				if predictResponse.Tokens > 0 {
-					tokenCount = int(predictResponse.Tokens)
+			req := llmservice.PredictRequest{
+				ModelName:   modelPath,
+				Message:     prompt,
+				MaxTokens:   maxTokens,
+				Temperature: 0.0,
+				Stream:      true,
+			}
+
+			respChan := make(chan llmservice.PredictResponse, 128)
+
+			err := llmService.Predict(ctx, req, respChan)
+			if err != nil {
+				results[idx] = parallelResult{index: idx, prompt: prompt, err: err, duration: time.Since(reqStart)}
+				return
+			}
+
+			var fullResponse string
+			var tokenCount int
+
+			for resp := range respChan {
+				if resp.Error != nil {
+					results[idx] = parallelResult{index: idx, prompt: prompt, err: resp.Error, duration: time.Since(reqStart)}
+					return
 				}
-
-				if predictResponse.Done {
+				fullResponse += resp.Message
+				if resp.Tokens > 0 {
+					tokenCount = int(resp.Tokens)
+				}
+				if resp.Done {
 					break
 				}
 			}
-		}()
 
-		err := llmService.Predict(ctx, predictRequest, predictResponseChan)
-		if err != nil {
-			logger.Errorf("Failed to predict: %v", err)
-			os.Exit(1)
-		}
-
-		wg.Wait()
-
-		generationTime := time.Since(startTime)
-		throughput := float64(tokenCount) / generationTime.Seconds()
-
-		logger.Infof("=== PERFORMANCE RESULTS ===")
-		logger.Infof("Total tokens: %d", tokenCount)
-		logger.Infof("Generation time: %.2fs", generationTime.Seconds())
-		logger.Infof("Throughput: %.2f tokens/second", throughput)
-		logger.Infof("Full response: %s", fullResponse)
-		logger.Infof("================================")
-
-		logger.Infof("Predict done")
+			results[idx] = parallelResult{
+				index:    idx,
+				prompt:   prompt,
+				response: fullResponse,
+				tokens:   tokenCount,
+				duration: time.Since(reqStart),
+			}
+		}(i)
 	}
 
-	logger.Infof("Done")
+	wg.Wait()
+	totalTime := time.Since(startTime)
+
+	logger.Infof("=== PARALLEL TEST RESULTS ===")
+	allPassed := true
+	totalTokens := 0
+	for _, r := range results {
+		if r.err != nil {
+			logger.Errorf("  Request %d: FAILED after %.2fs - %v", r.index, r.duration.Seconds(), r.err)
+			allPassed = false
+		} else {
+			throughput := float64(0)
+			if r.duration.Seconds() > 0 {
+				throughput = float64(r.tokens) / r.duration.Seconds()
+			}
+			logger.Infof("  Request %d: OK - %d tokens in %.2fs (%.2f t/s)",
+				r.index, r.tokens, r.duration.Seconds(), throughput)
+			logger.Infof("    Prompt:   %q", r.prompt[:min(60, len(r.prompt))]+"...")
+			logger.Infof("    Response: %q", r.response[:min(80, len(r.response))])
+			totalTokens += r.tokens
+		}
+	}
+
+	logger.Infof("")
+	logger.Infof("Total wall-clock time: %.2fs", totalTime.Seconds())
+	logger.Infof("Total tokens generated: %d", totalTokens)
+	if totalTime.Seconds() > 0 {
+		logger.Infof("Aggregate throughput: %.2f tokens/second", float64(totalTokens)/totalTime.Seconds())
+	}
+
+	if allPassed {
+		logger.Infof("RESULT: ALL %d PARALLEL REQUESTS COMPLETED SUCCESSFULLY", nParallel)
+	} else {
+		logger.Errorf("RESULT: SOME PARALLEL REQUESTS FAILED")
+		os.Exit(1)
+	}
 }

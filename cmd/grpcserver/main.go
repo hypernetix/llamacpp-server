@@ -21,10 +21,16 @@ import (
 )
 
 type flagOptions struct {
-	Host       string `long:"host" default:"127.0.0.1" description:"host address to bind (use 0.0.0.0 for Docker)"`
-	Port       string `long:"port" default:"50051" description:"port to listen for gRPC server"`
-	NGpuLayers int    `long:"ngpu" default:"99" description:"number of GPU layers"`
-	UseMmap    bool   `long:"mmap" description:"use mmap"`
+	Host         string `long:"host" default:"127.0.0.1" description:"host address to bind (use 0.0.0.0 for Docker)"`
+	Port         string `long:"port" default:"50051" description:"port to listen for gRPC server"`
+	NGpuLayers   int    `long:"ngpu" default:"99" description:"number of GPU layers"`
+	UseMmap      bool   `long:"mmap" description:"use mmap"`
+	FlashAttn    bool   `long:"flash-attn" description:"enable flash attention for faster inference"`
+	NParallel    int    `long:"n-parallel" default:"0" description:"max concurrent inference requests (0=unlimited)"`
+	Threads      int    `long:"threads" default:"0" description:"number of threads for generation (0=auto-detect)"`
+	ThreadsBatch int    `long:"threads-batch" default:"0" description:"number of threads for batch/prompt processing (0=auto-detect)"`
+	CtxSize      int    `long:"ctx-size" default:"4096" description:"context window size per inference slot"`
+	BatchSize    int    `long:"batch-size" default:"2048" description:"batch size for prompt processing"`
 }
 
 func main() {
@@ -71,6 +77,23 @@ func main() {
 			NGpuLayers: opts.NGpuLayers,
 			UseMmap:    opts.UseMmap,
 		},
+		Predict: llamacppgrpcserver.PredictOptions{
+			FlashAttn:     opts.FlashAttn,
+			NParallel:     opts.NParallel,
+			NThreads:      opts.Threads,
+			NThreadsBatch: opts.ThreadsBatch,
+			CtxSize:       opts.CtxSize,
+			BatchSize:     opts.BatchSize,
+		},
+	}
+
+	if opts.NParallel > 0 {
+		logger.Infof("Max concurrent predictions: %d", opts.NParallel)
+	} else {
+		logger.Infof("Max concurrent predictions: unlimited")
+	}
+	if opts.FlashAttn {
+		logger.Infof("Flash attention: enabled")
 	}
 	llmServer := llamacppgrpcserver.NewLLMServer(llmServerOptions, logger)
 
