@@ -120,7 +120,7 @@ New Go bindings needed:
 After a request completes, its KV cache entries must be freed. The llama.cpp memory
 API provides:
 - `llama_memory_seq_pos_max(mem, seq_id)` — query sequence position (already bound).
-- Sequence removal/clearing functions (need new bindings for the b8292+ memory API).
+- Sequence removal/clearing functions (need new bindings for the b8323+ memory API).
 
 ### 3. Inference Engine (Scheduler)
 

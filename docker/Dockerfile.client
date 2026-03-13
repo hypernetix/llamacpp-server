@@ -15,7 +15,6 @@ FROM golang:1.22-bookworm AS builder
 RUN apt-get update && apt-get install -y \
     make \
     wget \
-    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -29,7 +28,7 @@ COPY . .
 
 # The client needs llama.cpp binaries because it shares code with bindings
 # Use Makefile to prepare them
-ARG LLAMA_VERSION=b6770
+ARG LLAMA_VERSION=b8323
 ENV LLAMA_VERSION=${LLAMA_VERSION}
 RUN make prepare LLAMA_VERSION=${LLAMA_VERSION}
 

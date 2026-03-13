@@ -20,7 +20,7 @@ concurrency:
 # Environment variables for all jobs
 env:
   GO_VERSION: '1.22'
-  LLAMA_VERSION: b6770
+  LLAMA_VERSION: b8323
   # Small test model for CI (~95MB) - SmolLM2-135M-Instruct Q4_K_M
   TEST_MODEL_URL: https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf
   TEST_MODEL_NAME: SmolLM2-135M-Instruct-Q4_K_M.gguf
@@ -83,7 +83,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip
+          sudo apt-get install -y wget
       
       # Step 5b: Install dependencies (macOS)
       - name: Install dependencies (macOS)

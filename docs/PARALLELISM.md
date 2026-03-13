@@ -119,7 +119,7 @@ llamacppserver --ngpu 99 --split-mode none --main-gpu 0
 
 ### Current limitations
 
-As of llama.cpp b8292:
+As of llama.cpp b8323:
 
 - TP works best with dense (non-MoE) models.
 - Best results with 2 GPUs of equal VRAM (use `--tensor-split` to adjust for

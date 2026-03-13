@@ -43,7 +43,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.server
       args:
-        LLAMA_VERSION: ${LLAMA_VERSION:-b6770}
+        LLAMA_VERSION: ${LLAMA_VERSION:-b8323}
     image: llamacpp-server:${IMAGE_TAG:-ci}
     container_name: llamacpp-server-ci
     depends_on:
@@ -69,7 +69,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.client
       args:
-        LLAMA_VERSION: ${LLAMA_VERSION:-b6770}
+        LLAMA_VERSION: ${LLAMA_VERSION:-b8323}
     image: llamacpp-client:${IMAGE_TAG:-ci}
     container_name: llamacpp-client-ci
     depends_on:

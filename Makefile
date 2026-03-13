@@ -20,9 +20,9 @@
 # Configuration
 # =============================================================================
 
-# llama.cpp version to download (can be overridden: make LLAMA_VERSION=b6770)
+# llama.cpp version to download (can be overridden: make LLAMA_VERSION=b8323)
 # Check out for the latest release here: https://github.com/ggml-org/llama.cpp/releases
-LLAMA_VERSION ?= b8292
+LLAMA_VERSION ?= b8323
 
 # Build directories (use forward slashes - works everywhere)
 BUILD_DIR := build
@@ -81,12 +81,12 @@ else
     ARCH := $(shell uname -m)
     ifeq ($(DETECTED_OS),Darwin)
         ifeq ($(ARCH),arm64)
-            LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-macos-arm64.zip
+            LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-macos-arm64.tar.gz
         else
-            LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-macos-x64.zip
+            LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-macos-x64.tar.gz
         endif
     else
-        LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-ubuntu-x64.zip
+        LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-ubuntu-x64.tar.gz
     endif
     LLAMA_URL := https://github.com/ggml-org/llama.cpp/releases/download/$(LLAMA_VERSION)/$(LLAMA_ARCHIVE)
     EXE :=
@@ -116,7 +116,7 @@ ifdef CUDA_AVAILABLE
         CUDA_URL := https://github.com/ggml-org/llama.cpp/releases/download/$(LLAMA_VERSION)/$(CUDA_ARCHIVE)
         DLLS += cudart64_12.dll cublas64_12.dll cublasLt64_12.dll
     else ifeq ($(DETECTED_OS),Linux)
-        LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-ubuntu-vulkan-x64.zip
+        LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-ubuntu-vulkan-x64.tar.gz
         LLAMA_URL := https://github.com/ggml-org/llama.cpp/releases/download/$(LLAMA_VERSION)/$(LLAMA_ARCHIVE)
     endif
 endif
@@ -161,7 +161,7 @@ else ifeq ($(DETECTED_OS),Darwin)
 	@[ -d "$$(brew --prefix libomp 2>/dev/null)" ] || { echo "Error: libomp not found. Install with: brew install libomp"; exit 1; }
 else
 	@command -v wget >/dev/null 2>&1 || { echo "Error: wget not found. Install with: sudo apt install wget"; exit 1; }
-	@command -v unzip >/dev/null 2>&1 || { echo "Error: unzip not found. Install with: sudo apt install unzip"; exit 1; }
+	@command -v tar >/dev/null 2>&1 || { echo "Error: tar not found. Install with: sudo apt install tar"; exit 1; }
 	@command -v go >/dev/null 2>&1 || { echo "Error: go not found. Install Go from https://go.dev/dl/"; exit 1; }
 endif
 
@@ -183,7 +183,7 @@ ifdef CUDA_AVAILABLE
 endif
 else
 	wget -q -P $(LLAMA_DIR) $(LLAMA_URL)
-	cd $(LLAMA_DIR) && unzip -q $(LLAMA_ARCHIVE)
+	cd $(LLAMA_DIR) && tar xzf $(LLAMA_ARCHIVE)
 endif
 	@echo ""
 	@echo "=== Downloading matching header files from $(LLAMA_VERSION) source ==="
@@ -191,8 +191,8 @@ ifeq ($(OS),Windows_NT)
 	$(PS) "Invoke-WebRequest -Uri 'https://github.com/ggml-org/llama.cpp/archive/$(LLAMA_VERSION).zip' -OutFile '$(LLAMA_DIR)/llama-src.zip'"
 	$(PS) "Expand-Archive -Path '$(LLAMA_DIR)/llama-src.zip' -DestinationPath '$(LLAMA_DIR)' -Force"
 else
-	wget -q -O $(LLAMA_DIR)/llama-src.zip https://github.com/ggml-org/llama.cpp/archive/$(LLAMA_VERSION).zip
-	cd $(LLAMA_DIR) && unzip -q llama-src.zip
+	wget -q -O $(LLAMA_DIR)/llama-src.tar.gz https://github.com/ggml-org/llama.cpp/archive/$(LLAMA_VERSION).tar.gz
+	cd $(LLAMA_DIR) && tar xzf llama-src.tar.gz
 endif
 	@echo ""
 	@echo "=== Organizing directory structure ==="
@@ -214,7 +214,7 @@ else
 		mv $(LLAMA_DIR)/build/bin/LICENSE* $(LLAMA_DIR)/ 2>/dev/null || true; \
 		rm -rf $(LLAMA_DIR)/build; \
 	else \
-		mv $(LLAMA_DIR)/llama-*[!.zip] $(LLAMA_DIR)/bin/ 2>/dev/null || true; \
+		for f in $(LLAMA_DIR)/llama-*; do case "$$f" in *.tar.gz) continue;; esac; mv "$$f" $(LLAMA_DIR)/bin/ 2>/dev/null || true; done; \
 		mv $(LLAMA_DIR)/*.so* $(LLAMA_DIR)/lib/ 2>/dev/null || true; \
 		mv $(LLAMA_DIR)/*.dylib $(LLAMA_DIR)/lib/ 2>/dev/null || true; \
 	fi
@@ -248,7 +248,11 @@ else
 	-cp -r $(LLAMA_DIR)/llama.cpp-$(LLAMA_VERSION)/ggml/include/* $(LLAMA_DIR)/include/ggml/ 2>/dev/null || true
 endif
 	@echo "Cleaning up temporary files..."
+ifeq ($(OS),Windows_NT)
 	@$(call RM_F,$(LLAMA_DIR)/llama-src.zip)
+else
+	@$(call RM_F,$(LLAMA_DIR)/llama-src.tar.gz)
+endif
 	@$(call RM_RF,$(LLAMA_DIR)/llama.cpp-$(LLAMA_VERSION))
 	@$(call RM_F,$(LLAMA_DIR)/$(LLAMA_ARCHIVE))
 	@echo ""
