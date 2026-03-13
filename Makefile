@@ -1,4 +1,4 @@
-# Unified Makefile for llama.cpp Go gRPC Server
+# Unified Makefile for llama.cpp Go Server
 # Handles: binary download, import library generation (Windows), and Go build
 #
 # Compatible with: MSYS make, MinGW make, GNU make on Windows/Linux/macOS
@@ -10,8 +10,8 @@
 #   make build    - Build Go binaries only (assumes 'prepare' was done)
 #
 # Run targets:
-#   make run-grpcserver      - Run the gRPC server
-#   make run-grpcclienttest  - Run the gRPC client test
+#   make run-llamacppserver  - Run the llamacpp server
+#   make run-llamacppclienttest  - Run the llamacpp client test
 #   make run-paralleltest    - Run the parallel inference test
 #   make run-inferencetest1  - Run inference test 1
 #   make run-inferencetest2  - Run inference test 2
@@ -31,20 +31,26 @@ LLAMA_DIR := $(BUILD_DIR)/llama-binaries
 # Go commands
 GO_BUILD_FLAGS := -v
 
-# Default port for gRPC server
+# Default port for gRPC server (empty = disabled)
 GRPC_PORT ?= 50052
+
+# Default port for HTTP+SSE server (empty = disabled)
+HTTP_PORT ?= 50051
 
 # Default port for gRPC client test
 ATTACH_GRPC_PORT ?= 0
 
-# Default path for gRPC server
+# Default port for HTTP+SSE client test
+ATTACH_HTTP_PORT ?= 0
+
+# Default path for llamacpp server
 ifeq ($(OS),Windows_NT)
-	GRPC_SERVER_PATH ?= "./cmd/grpcserver/grpcserver.exe"
+	SERVER_PATH ?= "./cmd/llamacppserver/llamacppserver.exe"
 else
-	GRPC_SERVER_PATH ?= "./cmd/grpcserver/grpcserver"
+	SERVER_PATH ?= "./cmd/llamacppserver/llamacppserver"
 endif
 
-# Default model path (override with: make run-grpcclienttest MODEL_PATH=/path/to/model.gguf)
+# Default model path (override with: make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf)
 MODEL_PATH ?=
 
 # =============================================================================
@@ -121,9 +127,9 @@ endif
 
 .PHONY: all prepare build clean help check-deps
 .PHONY: download-binaries import-libs
-.PHONY: build-grpcserver build-grpcclienttest build-inferencetest1 build-inferencetest2
-.PHONY: run-grpcserver run-grpcclienttest run-paralleltest run-inferencetest1 run-inferencetest2
-.PHONY: copy-dlls-grpcserver copy-dlls-grpcclienttest copy-dlls-inferencetest1 copy-dlls-inferencetest2
+.PHONY: build-llamacppserver build-llamacppclienttest build-inferencetest1 build-inferencetest2
+.PHONY: run-llamacppserver run-llamacppclienttest run-paralleltest run-inferencetest1 run-inferencetest2
+.PHONY: copy-dlls-llamacppserver copy-dlls-llamacppclienttest copy-dlls-inferencetest1 copy-dlls-inferencetest2
 .PHONY: docker-build docker-build-server docker-build-client
 .PHONY: docker-integration-test docker-integration-test-ci docker-clean
 
@@ -131,14 +137,14 @@ all: prepare build
 	@echo ""
 	@echo "=== Build Complete ==="
 	@echo "Executables built in cmd/*/."
-	@echo "Run with: make run-grpcserver, make run-grpcclienttest, etc."
+	@echo "Run with: make run-llamacppserver, make run-llamacppclienttest, etc."
 
 prepare: download-binaries import-libs
 	@echo ""
 	@echo "=== Preparation Complete ==="
 	@echo "You can now build with: make build"
 
-build: build-grpcserver build-grpcclienttest build-inferencetest1 build-inferencetest2
+build: build-llamacppserver build-llamacppclienttest build-inferencetest1 build-inferencetest2
 	@echo ""
 	@echo "=== All Go binaries built ==="
 
@@ -278,13 +284,13 @@ endif
 # Go Build Targets
 # =============================================================================
 
-build-grpcserver:
-	@echo "Building grpcserver..."
-	cd cmd/grpcserver && go build $(GO_BUILD_FLAGS) -o grpcserver$(EXE) .
+build-llamacppserver:
+	@echo "Building llamacppserver..."
+	cd cmd/llamacppserver && go build $(GO_BUILD_FLAGS) -o llamacppserver$(EXE) .
 
-build-grpcclienttest:
-	@echo "Building grpcclienttest..."
-	cd cmd/grpcclienttest && go build $(GO_BUILD_FLAGS) -o grpcclienttest$(EXE) .
+build-llamacppclienttest:
+	@echo "Building llamacppclienttest..."
+	cd cmd/llamacppclienttest && go build $(GO_BUILD_FLAGS) -o llamacppclienttest$(EXE) .
 
 build-inferencetest1:
 	@echo "Building inferencetest1..."
@@ -298,24 +304,24 @@ build-inferencetest2:
 # Copy shared libraries - needed for ggml_backend_load_all() to find backends
 # =============================================================================
 
-copy-dlls-grpcserver:
+copy-dlls-llamacppserver:
 ifeq ($(OS),Windows_NT)
-	@echo "Copying DLLs to cmd/grpcserver/..."
-	@$(PS) "Copy-Item -Path '$(LLAMA_DIR)/lib/*.dll' -Destination 'cmd/grpcserver/' -Force"
+	@echo "Copying DLLs to cmd/llamacppserver/..."
+	@$(PS) "Copy-Item -Path '$(LLAMA_DIR)/lib/*.dll' -Destination 'cmd/llamacppserver/' -Force"
 else
-	@echo "Copying shared libraries to cmd/grpcserver/..."
-	@cp -f $(LLAMA_DIR)/lib/*.so* cmd/grpcserver/ 2>/dev/null || true
-	@cp -f $(LLAMA_DIR)/lib/*.dylib cmd/grpcserver/ 2>/dev/null || true
+	@echo "Copying shared libraries to cmd/llamacppserver/..."
+	@cp -f $(LLAMA_DIR)/lib/*.so* cmd/llamacppserver/ 2>/dev/null || true
+	@cp -f $(LLAMA_DIR)/lib/*.dylib cmd/llamacppserver/ 2>/dev/null || true
 endif
 
-copy-dlls-grpcclienttest:
+copy-dlls-llamacppclienttest:
 ifeq ($(OS),Windows_NT)
-	@echo "Copying DLLs to cmd/grpcclienttest/..."
-	@$(PS) "Copy-Item -Path '$(LLAMA_DIR)/lib/*.dll' -Destination 'cmd/grpcclienttest/' -Force"
+	@echo "Copying DLLs to cmd/llamacppclienttest/..."
+	@$(PS) "Copy-Item -Path '$(LLAMA_DIR)/lib/*.dll' -Destination 'cmd/llamacppclienttest/' -Force"
 else
-	@echo "Copying shared libraries to cmd/grpcclienttest/..."
-	@cp -f $(LLAMA_DIR)/lib/*.so* cmd/grpcclienttest/ 2>/dev/null || true
-	@cp -f $(LLAMA_DIR)/lib/*.dylib cmd/grpcclienttest/ 2>/dev/null || true
+	@echo "Copying shared libraries to cmd/llamacppclienttest/..."
+	@cp -f $(LLAMA_DIR)/lib/*.so* cmd/llamacppclienttest/ 2>/dev/null || true
+	@cp -f $(LLAMA_DIR)/lib/*.dylib cmd/llamacppclienttest/ 2>/dev/null || true
 endif
 
 copy-dlls-inferencetest1:
@@ -358,36 +364,42 @@ RUN_ENV_GRPCCLIENTTEST := $(RUN_ENV)
 RUN_ENV_INFERENCETEST1 := $(RUN_ENV)
 RUN_ENV_INFERENCETEST2 := $(RUN_ENV)
 ifeq ($(DETECTED_OS),Darwin)
-    RUN_ENV_GRPCSERVER := DYLD_LIBRARY_PATH=$(CURDIR)/cmd/grpcserver:$(CURDIR)/$(LLAMA_DIR)/lib:$$DYLD_LIBRARY_PATH
-    RUN_ENV_GRPCCLIENTTEST := DYLD_LIBRARY_PATH=$(CURDIR)/cmd/grpcclienttest:$(CURDIR)/$(LLAMA_DIR)/lib:$$DYLD_LIBRARY_PATH
+    RUN_ENV_GRPCSERVER := DYLD_LIBRARY_PATH=$(CURDIR)/cmd/llamacppserver:$(CURDIR)/$(LLAMA_DIR)/lib:$$DYLD_LIBRARY_PATH
+    RUN_ENV_GRPCCLIENTTEST := DYLD_LIBRARY_PATH=$(CURDIR)/cmd/llamacppclienttest:$(CURDIR)/$(LLAMA_DIR)/lib:$$DYLD_LIBRARY_PATH
     RUN_ENV_INFERENCETEST1 := DYLD_LIBRARY_PATH=$(CURDIR)/cmd/inferencetest1:$(CURDIR)/$(LLAMA_DIR)/lib:$$DYLD_LIBRARY_PATH
     RUN_ENV_INFERENCETEST2 := DYLD_LIBRARY_PATH=$(CURDIR)/cmd/inferencetest2:$(CURDIR)/$(LLAMA_DIR)/lib:$$DYLD_LIBRARY_PATH
 else ifneq ($(OS),Windows_NT)
-    RUN_ENV_GRPCSERVER := LD_LIBRARY_PATH=$(CURDIR)/cmd/grpcserver:$(CURDIR)/$(LLAMA_DIR)/lib:$$LD_LIBRARY_PATH
-    RUN_ENV_GRPCCLIENTTEST := LD_LIBRARY_PATH=$(CURDIR)/cmd/grpcclienttest:$(CURDIR)/$(LLAMA_DIR)/lib:$$LD_LIBRARY_PATH
+    RUN_ENV_GRPCSERVER := LD_LIBRARY_PATH=$(CURDIR)/cmd/llamacppserver:$(CURDIR)/$(LLAMA_DIR)/lib:$$LD_LIBRARY_PATH
+    RUN_ENV_GRPCCLIENTTEST := LD_LIBRARY_PATH=$(CURDIR)/cmd/llamacppclienttest:$(CURDIR)/$(LLAMA_DIR)/lib:$$LD_LIBRARY_PATH
     RUN_ENV_INFERENCETEST1 := LD_LIBRARY_PATH=$(CURDIR)/cmd/inferencetest1:$(CURDIR)/$(LLAMA_DIR)/lib:$$LD_LIBRARY_PATH
     RUN_ENV_INFERENCETEST2 := LD_LIBRARY_PATH=$(CURDIR)/cmd/inferencetest2:$(CURDIR)/$(LLAMA_DIR)/lib:$$LD_LIBRARY_PATH
 endif
 
-run-grpcserver: build-grpcserver copy-dlls-grpcserver
+run-llamacppserver: build-llamacppserver copy-dlls-llamacppserver
 	@echo ""
+ifdef GRPC_PORT
 	@echo "=== Running gRPC Server on port $(GRPC_PORT) ==="
-	$(RUN_ENV_GRPCSERVER) ./cmd/grpcserver/grpcserver$(EXE) --port $(GRPC_PORT)
+	$(RUN_ENV_GRPCSERVER) ./cmd/llamacppserver/llamacppserver$(EXE) --grpc-port $(GRPC_PORT)
+endif
+ifdef HTTP_PORT
+	@echo "=== Running HTTP+SSE Server on port $(HTTP_PORT) ==="
+	$(RUN_ENV_GRPCSERVER) ./cmd/llamacppserver/llamacppserver$(EXE) --http-port $(HTTP_PORT)
+endif
 
-run-grpcclienttest: build-grpcclienttest copy-dlls-grpcclienttest copy-dlls-grpcserver
+run-llamacppclienttest: build-llamacppclienttest copy-dlls-llamacppclienttest copy-dlls-llamacppserver
 ifeq ($(MODEL_PATH),)
 	@echo "Error: MODEL_PATH is required"
-	@echo "Usage: make run-grpcclienttest MODEL_PATH=/path/to/model.gguf"
+	@echo "Usage: make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf"
 	@exit 1
 endif
 	@echo ""
-	@echo "=== Running gRPC Client Test ==="
-	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/grpcclienttest/grpcclienttest$(EXE) --port $(ATTACH_GRPC_PORT) --server "$(GRPC_SERVER_PATH)" --model "$(MODEL_PATH)"
+	@echo "=== Running llamacpp client test ==="
+	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/llamacppclienttest/llamacppclienttest$(EXE) --grpc-port $(ATTACH_GRPC_PORT) --http-port $(ATTACH_HTTP_PORT) --server "$(SERVER_PATH)" --model "$(MODEL_PATH)"
 
 # Default parallel count for parallel test
 PARALLEL_N ?= 4
 
-run-paralleltest: build-grpcclienttest copy-dlls-grpcclienttest copy-dlls-grpcserver
+run-paralleltest: build-llamacppclienttest copy-dlls-llamacppclienttest copy-dlls-llamacppserver
 ifeq ($(MODEL_PATH),)
 	@echo "Error: MODEL_PATH is required"
 	@echo "Usage: make run-paralleltest MODEL_PATH=/path/to/model.gguf"
@@ -395,8 +407,8 @@ ifeq ($(MODEL_PATH),)
 	@exit 1
 endif
 	@echo ""
-	@echo "=== Running Parallel Inference Test ($(PARALLEL_N) concurrent requests) ==="
-	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/grpcclienttest/grpcclienttest$(EXE) --port $(ATTACH_GRPC_PORT) --server "$(GRPC_SERVER_PATH)" --model "$(MODEL_PATH)" --test-mode parallel --parallel-n $(PARALLEL_N)
+	@echo "=== Running parallel inference test ($(PARALLEL_N) concurrent requests) ==="
+	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/llamacppclienttest/llamacppclienttest$(EXE) --grpc-port $(ATTACH_GRPC_PORT) --http-port $(ATTACH_HTTP_PORT) --server "$(SERVER_PATH)" --model "$(MODEL_PATH)" --test-mode parallel --parallel-n $(PARALLEL_N)
 
 run-inferencetest1: build-inferencetest1 copy-dlls-inferencetest1
 ifeq ($(MODEL_PATH),)
@@ -425,22 +437,22 @@ endif
 clean:
 	@echo "Cleaning build artifacts..."
 	@$(call RM_RF,$(BUILD_DIR))
-	@$(call RM_F,cmd/grpcserver/grpcserver$(EXE))
-	@$(call RM_F,cmd/grpcclienttest/grpcclienttest$(EXE))
+	@$(call RM_F,cmd/llamacppserver/llamacppserver$(EXE))
+	@$(call RM_F,cmd/llamacppclienttest/llamacppclienttest$(EXE))
 	@$(call RM_F,cmd/inferencetest1/inferencetest1$(EXE))
 	@$(call RM_F,cmd/inferencetest2/inferencetest2$(EXE))
 ifeq ($(OS),Windows_NT)
-	-$(PS) "Remove-Item -Path 'cmd/grpcserver/*.dll' -Force -ErrorAction SilentlyContinue"
-	-$(PS) "Remove-Item -Path 'cmd/grpcclienttest/*.dll' -Force -ErrorAction SilentlyContinue"
+	-$(PS) "Remove-Item -Path 'cmd/llamacppserver/*.dll' -Force -ErrorAction SilentlyContinue"
+	-$(PS) "Remove-Item -Path 'cmd/llamacppclienttest/*.dll' -Force -ErrorAction SilentlyContinue"
 	-$(PS) "Remove-Item -Path 'cmd/inferencetest1/*.dll' -Force -ErrorAction SilentlyContinue"
 	-$(PS) "Remove-Item -Path 'cmd/inferencetest2/*.dll' -Force -ErrorAction SilentlyContinue"
 else
-	-rm -f cmd/grpcserver/*.so* 2>/dev/null || true
-	-rm -f cmd/grpcclienttest/*.so* 2>/dev/null || true
+	-rm -f cmd/llamacppserver/*.so* 2>/dev/null || true
+	-rm -f cmd/llamacppclienttest/*.so* 2>/dev/null || true
 	-rm -f cmd/inferencetest1/*.so* 2>/dev/null || true
 	-rm -f cmd/inferencetest2/*.so* 2>/dev/null || true
-	-rm -f cmd/grpcserver/*.dylib 2>/dev/null || true
-	-rm -f cmd/grpcclienttest/*.dylib 2>/dev/null || true
+	-rm -f cmd/llamacppserver/*.dylib 2>/dev/null || true
+	-rm -f cmd/llamacppclienttest/*.dylib 2>/dev/null || true
 	-rm -f cmd/inferencetest1/*.dylib 2>/dev/null || true
 	-rm -f cmd/inferencetest2/*.dylib 2>/dev/null || true
 endif
@@ -452,7 +464,7 @@ endif
 
 help:
 	@echo "=============================================="
-	@echo "  llama.cpp Go gRPC Server - Build System"
+	@echo "  llama.cpp Go Server - Build System"
 	@echo "=============================================="
 	@echo ""
 	@echo "Main targets:"
@@ -462,14 +474,14 @@ help:
 	@echo "  make clean            - Remove all build artifacts"
 	@echo ""
 	@echo "Individual build targets:"
-	@echo "  make build-grpcserver      - Build gRPC server"
-	@echo "  make build-grpcclienttest  - Build gRPC client test"
+	@echo "  make build-llamacppserver  - Build llamacpp server"
+	@echo "  make build-llamacppclienttest  - Build llamacpp client test"
 	@echo "  make build-inferencetest1  - Build inference test 1"
 	@echo "  make build-inferencetest2  - Build inference test 2"
 	@echo ""
 	@echo "Run targets:"
-	@echo "  make run-grpcserver                          - Run gRPC server"
-	@echo "  make run-grpcclienttest MODEL_PATH=<path>    - Run client test"
+	@echo "  make run-llamacppserver                      - Run llamacpp server"
+	@echo "  make run-llamacppclienttest MODEL_PATH=<path>    - Run llamacpp client test"
 	@echo "  make run-paralleltest MODEL_PATH=<path>      - Run parallel inference test"
 	@echo "  make run-inferencetest1 MODEL_PATH=<path>    - Run inference test 1"
 	@echo "  make run-inferencetest2 MODEL_PATH=<path>    - Run inference test 2"
@@ -485,8 +497,10 @@ help:
 	@echo "Configuration variables:"
 	@echo "  LLAMA_VERSION  	- llama.cpp version (default: $(LLAMA_VERSION))"
 	@echo "  GRPC_PORT      	- gRPC server port (default: $(GRPC_PORT))"
+	@echo "  HTTP_PORT      	- HTTP+SSE server port (default: disabled)"
 	@echo "  ATTACH_GRPC_PORT 	- gRPC client test port (default: $(ATTACH_GRPC_PORT))"
-	@echo "  GRPC_SERVER_PATH 	- Path to gRPC server executable (default: $(GRPC_SERVER_PATH))"
+	@echo "  ATTACH_HTTP_PORT 	- HTTP+SSE client test port (default: $(ATTACH_HTTP_PORT))"
+	@echo "  SERVER_PATH 	- Path to llamacpp server executable (default: $(SERVER_PATH))"
 	@echo "  MODEL_PATH     	- Path to GGUF model file"
 	@echo "  PARALLEL_N     	- Number of concurrent requests for parallel test (default: 4)"
 	@echo "  DOCKER_NO_CACHE	- Set to 1 to disable Docker build cache"
@@ -498,8 +512,10 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make all"
-	@echo "  make run-grpcserver GRPC_PORT=50053"
-	@echo "  make run-grpcclienttest MODEL_PATH=/path/to/model.gguf"
+	@echo "  make run-llamacppserver GRPC_PORT=50053"
+	@echo "  make run-llamacppserver HTTP_PORT=50053"
+	@echo "  make run-llamacppserver GRPC_PORT=50053 HTTP_PORT=8080"
+	@echo "  make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf"
 	@echo "  make run-paralleltest MODEL_PATH=/path/to/model.gguf PARALLEL_N=8"
 	@echo "  make LLAMA_VERSION=b6800 prepare"
 	@echo "  make docker-integration-test MODEL_PATH=/path/to/model.gguf"
@@ -525,12 +541,12 @@ docker-build: docker-build-server docker-build-client
 	@echo "=== All Docker images built ==="
 
 docker-build-server:
-	@echo "Building gRPC server Docker image..."
+	@echo "Building llamacpp server Docker image..."
 	docker build -f docker/Dockerfile.server -t llamacpp-server:$(IMAGE_TAG) \
 		--build-arg LLAMA_VERSION=$(LLAMA_VERSION) $(DOCKER_BUILD_FLAGS) .
 
 docker-build-client:
-	@echo "Building gRPC client Docker image..."
+	@echo "Building llamacpp client Docker image..."
 	docker build -f docker/Dockerfile.client -t llamacpp-client:$(IMAGE_TAG) \
 		--build-arg LLAMA_VERSION=$(LLAMA_VERSION) $(DOCKER_BUILD_FLAGS) .
 

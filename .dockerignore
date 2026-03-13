@@ -6,17 +6,17 @@ build/
 *.dylib
 
 # Binary files in cmd directories
-cmd/grpcserver/grpcserver
-cmd/grpcserver/grpcserver.exe
-cmd/grpcserver/*.dll
-cmd/grpcserver/*.so*
-cmd/grpcserver/*.dylib
+cmd/llamacppserver/llamacppserver
+cmd/llamacppserver/llamacppserver.exe
+cmd/llamacppserver/*.dll
+cmd/llamacppserver/*.so*
+cmd/llamacppserver/*.dylib
 
-cmd/grpcclienttest/grpcclienttest
-cmd/grpcclienttest/grpcclienttest.exe
-cmd/grpcclienttest/*.dll
-cmd/grpcclienttest/*.so*
-cmd/grpcclienttest/*.dylib
+cmd/llamacppclienttest/llamacppclienttest
+cmd/llamacppclienttest/llamacppclienttest.exe
+cmd/llamacppclienttest/*.dll
+cmd/llamacppclienttest/*.so*
+cmd/llamacppclienttest/*.dylib
 
 cmd/inferencetest1/inferencetest1
 cmd/inferencetest1/inferencetest1.exe

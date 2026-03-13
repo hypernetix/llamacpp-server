@@ -6,7 +6,7 @@
 #
 # This compose file:
 # 1. Downloads the test model (SmolLM2-135M) in an init container
-# 2. Starts the gRPC server with the model
+# 2. Starts the llamacpp server with the model
 # 3. Runs the client test with deterministic (greedy) settings
 # 4. Exits with the client's exit code
 
@@ -54,7 +54,7 @@ services:
     environment:
       - LD_LIBRARY_PATH=/app
       - MODEL_NAME=${MODEL_NAME:-SmolLM2-135M-Instruct-Q4_K_M.gguf}
-    command: ["--port", "50051"]
+    command: ["--grpc-port", "50051"]
     healthcheck:
       test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/50051' || exit 1"]
       interval: 5s
@@ -79,7 +79,7 @@ services:
     # Note: --model path is the path INSIDE THE SERVER container (via gRPC LoadModel)
     command: >
       --host server
-      --port 50051
+      --grpc-port 50051
       --model /models/${MODEL_NAME:-SmolLM2-135M-Instruct-Q4_K_M.gguf}
       --test-mode greedy
       --temperature 0

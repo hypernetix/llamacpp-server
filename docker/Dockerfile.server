@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for llamacpp gRPC server
+# Multi-stage Dockerfile for llamacpp server
 # Builds a portable Docker image with llama.cpp bindings
 #
 # Uses the project Makefile for consistent build process
@@ -32,8 +32,8 @@ ARG LLAMA_VERSION=b6770
 ENV LLAMA_VERSION=${LLAMA_VERSION}
 RUN make prepare LLAMA_VERSION=${LLAMA_VERSION}
 
-# Build the gRPC server using Makefile
-RUN make build-grpcserver
+# Build the llamacpp server using Makefile
+RUN make build-llamacppserver
 
 # =============================================================================
 # Stage 2: Runtime image
@@ -49,7 +49,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy the binary
-COPY --from=builder /app/cmd/grpcserver/grpcserver /app/
+COPY --from=builder /app/cmd/llamacppserver/llamacppserver /app/
 
 # Copy ALL shared libraries from the lib directory
 COPY --from=builder /app/build/llama-binaries/lib/ /app/
@@ -74,5 +74,5 @@ EXPOSE 50051
 
 # Run the server
 # --host 0.0.0.0 is required for Docker networking
-ENTRYPOINT ["/app/grpcserver", "--host", "0.0.0.0"]
-CMD ["--port", "50051"]
+ENTRYPOINT ["/app/llamacppserver", "--host", "0.0.0.0"]
+CMD ["--grpc-port", "50051"]

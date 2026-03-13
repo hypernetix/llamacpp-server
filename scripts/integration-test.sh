@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Integration test script for llamacpp gRPC server
+# Integration test script for llamacpp server
 # Runs Docker-based integration tests with configurable parameters
 #
 # Usage:

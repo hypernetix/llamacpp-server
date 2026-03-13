@@ -1,10 +1,10 @@
-# Multi-stage Dockerfile for llamacpp gRPC client test
-# Used for integration testing against a remote gRPC server
+# Multi-stage Dockerfile for llamacpp llamacpp client test
+# Used for integration testing against a remote llamacpp server
 #
 # Uses the project Makefile for consistent build process
 #
 # Build: docker build -f docker/Dockerfile.client -t llamacpp-client .
-# Run:   docker run --network host llamacpp-client --host server --port 50051 --model /models/model.gguf
+# Run:   docker run --network host llamacpp-client --host server --grpc-port 50051 --model /models/model.gguf
 
 # =============================================================================
 # Stage 1: Build Go binary using Makefile
@@ -34,7 +34,7 @@ ENV LLAMA_VERSION=${LLAMA_VERSION}
 RUN make prepare LLAMA_VERSION=${LLAMA_VERSION}
 
 # Build the client test binary using Makefile
-RUN make build-grpcclienttest
+RUN make build-llamacppclienttest
 
 # =============================================================================
 # Stage 2: Runtime image
@@ -50,7 +50,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy the binary
-COPY --from=builder /app/cmd/grpcclienttest/grpcclienttest /app/
+COPY --from=builder /app/cmd/llamacppclienttest/llamacppclienttest /app/
 
 # Copy ALL shared libraries from the lib directory
 COPY --from=builder /app/build/llama-binaries/lib/ /app/
@@ -70,5 +70,5 @@ ENV LD_LIBRARY_PATH="/app"
 RUN mkdir -p /models
 
 # Default entry point - connect to server
-ENTRYPOINT ["/app/grpcclienttest"]
+ENTRYPOINT ["/app/llamacppclienttest"]
 CMD ["--help"]

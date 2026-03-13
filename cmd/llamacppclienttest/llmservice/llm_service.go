@@ -42,9 +42,10 @@ type LLMService interface {
 }
 
 type LLMServiceOptions struct {
-	ServerPath string
-	AttachHost string
-	AttachPort int
+	ServerPath     string
+	AttachHost     string
+	AttachGRPCPort int
+	AttachHTTPPort int
 }
 
 func NewLlamacppLLMService(options LLMServiceOptions, logger logging.SprintfLogger) (LLMService, error) {
@@ -53,7 +54,7 @@ func NewLlamacppLLMService(options LLMServiceOptions, logger logging.SprintfLogg
 
 	var serverProcess Process
 
-	port := options.AttachPort
+	port := options.AttachGRPCPort
 	if port == 0 {
 		logger.Debugf("Allocating free port")
 
@@ -66,7 +67,7 @@ func NewLlamacppLLMService(options LLMServiceOptions, logger logging.SprintfLogg
 		logger.Debugf("Allocated free port: %d", port)
 
 		serverPath := options.ServerPath
-		args := []string{"--port", fmt.Sprintf("%d", port)}
+		args := []string{"--grpc-port", fmt.Sprintf("%d", port)}
 
 		logger.Debugf("Running server process '%s' with args: %v", serverPath, args)
 

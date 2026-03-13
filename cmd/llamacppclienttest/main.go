@@ -9,26 +9,27 @@ import (
 	"sync"
 	"time"
 
-	llmservice "github.com/hypernetix/llamacpp_server/cmd/grpcclienttest/llmservice"
+	llmservice "github.com/hypernetix/llamacpp_server/cmd/llamacppclienttest/llmservice"
 	"github.com/hypernetix/llamacpp_server/internal/logging"
 
 	flags "github.com/jessevdk/go-flags"
 )
 
 type flagOptions struct {
-	ModelPath     string  `long:"model" description:"path to the model file"`
-	ServerPath    string  `long:"server" description:"path to the server executable"`
-	AttachHost    string  `long:"host" description:"host address to attach to (default: 127.0.0.1)" default:"127.0.0.1"`
-	AttachPort    int     `long:"port" description:"port to attach to the server"`
-	Temperature   float64 `long:"temperature" description:"sampling temperature" default:"0.7"`
-	TopP          float64 `long:"top-p" description:"top-p sampling" default:"1.0"`
-	TopK          int     `long:"top-k" description:"top-k sampling" default:"0"`
-	RepeatPenalty float64 `long:"repeat-penalty" description:"repetition penalty" default:"1.0"`
-	MinP          float64 `long:"min-p" description:"min-p sampling" default:"0.05"`
-	RandomSeed    int     `long:"seed" description:"random seed for reproducible results (-1 for random)" default:"-1"`
-	MaxTokens     int     `long:"max-tokens" description:"maximum tokens to generate" default:"100"`
-	TestMode      string  `long:"test-mode" description:"test mode: baseline, greedy, seeded, stress, or parallel" default:"baseline"`
-	ParallelN     int     `long:"parallel-n" description:"number of concurrent requests for parallel test mode" default:"4"`
+	ModelPath      string  `long:"model" description:"path to the model file"`
+	ServerPath     string  `long:"server" description:"path to the server executable"`
+	AttachHost     string  `long:"host" description:"host address to attach to (default: 127.0.0.1)" default:"127.0.0.1"`
+	AttachGRPCPort int     `long:"grpc-port" description:"gRPC port to attach to the server"`
+	AttachHTTPPort int     `long:"http-port" description:"HTTP+SSE port to attach to the server"`
+	Temperature    float64 `long:"temperature" description:"sampling temperature" default:"0.7"`
+	TopP           float64 `long:"top-p" description:"top-p sampling" default:"1.0"`
+	TopK           int     `long:"top-k" description:"top-k sampling" default:"0"`
+	RepeatPenalty  float64 `long:"repeat-penalty" description:"repetition penalty" default:"1.0"`
+	MinP           float64 `long:"min-p" description:"min-p sampling" default:"0.05"`
+	RandomSeed     int     `long:"seed" description:"random seed for reproducible results (-1 for random)" default:"-1"`
+	MaxTokens      int     `long:"max-tokens" description:"maximum tokens to generate" default:"100"`
+	TestMode       string  `long:"test-mode" description:"test mode: baseline, greedy, seeded, stress, or parallel" default:"baseline"`
+	ParallelN      int     `long:"parallel-n" description:"number of concurrent requests for parallel test mode" default:"4"`
 }
 
 // Helper functions for pointer creation
@@ -50,8 +51,8 @@ func main() {
 
 	logger.Infof("opts: %+v", opts)
 
-	if opts.ServerPath == "" && opts.AttachPort == 0 {
-		fmt.Println("Server path or attach port is required")
+	if opts.ServerPath == "" && (opts.AttachGRPCPort == 0 && opts.AttachHTTPPort == 0) {
+		fmt.Println("Server path or attach gRPC or HTTP port is required")
 		os.Exit(1)
 	}
 
@@ -74,9 +75,10 @@ func main() {
 	logger.Infof("Starting LLM service...")
 
 	llmServiceOptions := llmservice.LLMServiceOptions{
-		ServerPath: opts.ServerPath,
-		AttachHost: opts.AttachHost,
-		AttachPort: opts.AttachPort,
+		ServerPath:     opts.ServerPath,
+		AttachHost:     opts.AttachHost,
+		AttachGRPCPort: opts.AttachGRPCPort,
+		AttachHTTPPort: opts.AttachHTTPPort,
 	}
 
 	llmService, err := llmservice.NewLlamacppLLMService(llmServiceOptions, logger)

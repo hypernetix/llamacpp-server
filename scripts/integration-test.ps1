@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Integration test script for llamacpp gRPC server (Windows PowerShell version)
+    Integration test script for llamacpp server (Windows PowerShell version)
 
 .DESCRIPTION
     Runs Docker-based integration tests with configurable parameters

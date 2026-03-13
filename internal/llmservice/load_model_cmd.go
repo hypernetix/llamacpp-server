@@ -1,4 +1,4 @@
-package llamacppgrpcserver
+package llmservice
 
 import (
 	llamacppbindings "github.com/hypernetix/llamacpp_server/internal/bindings"
@@ -9,7 +9,7 @@ import (
 type LoadModelOptions struct {
 	NGpuLayers  int
 	UseMmap     bool
-	SplitMode   int       // 0=none, 1=layer (PP), 2=row (TP)
+	SplitMode   int
 	MainGpu     int
 	TensorSplit []float32
 }
@@ -26,7 +26,7 @@ func (md *ModelData) Destroy() error {
 	return nil
 }
 
-func NewLoadModelFunc(options LoadModelOptions, logger logging.SprintfLogger) modelmanagement.LoadModelFunc {
+func newLoadModelFunc(options LoadModelOptions, logger logging.SprintfLogger) modelmanagement.LoadModelFunc {
 	cmd := &loadModelCmd{
 		options: options,
 		logger:  logger.With("module", "loadModelCmd"),

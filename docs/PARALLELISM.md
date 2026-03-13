@@ -1,7 +1,7 @@
 # Inference Parallelism in llama.cpp
 
 This document describes the parallelism features available in llama.cpp and how they
-are exposed in the llamacpp-server gRPC server.
+are exposed in the llamacpp-server.
 
 ## Overview of Parallelism Types
 
@@ -108,13 +108,13 @@ llama.cpp exposes TP via the `split_mode` model parameter:
 
 ```bash
 # Even 2-GPU tensor parallelism
-grpcserver --ngpu 99 --split-mode row --tensor-split 0.5,0.5
+llamacppserver --ngpu 99 --split-mode row --tensor-split 0.5,0.5
 
 # Uneven split (GPU 0 has more VRAM than GPU 1)
-grpcserver --ngpu 99 --split-mode row --tensor-split 0.7,0.3
+llamacppserver --ngpu 99 --split-mode row --tensor-split 0.7,0.3
 
 # Single GPU (disable multi-GPU)
-grpcserver --ngpu 99 --split-mode none --main-gpu 0
+llamacppserver --ngpu 99 --split-mode none --main-gpu 0
 ```
 
 ### Current limitations
@@ -215,7 +215,7 @@ especially for longer contexts.
 ### CPU-only development/testing
 
 ```
-grpcserver --n-parallel 1 --ctx-size 2048 --batch-size 512 --threads 4
+llamacppserver --n-parallel 1 --ctx-size 2048 --batch-size 512 --threads 4
 ```
 
 Conservative settings suitable for small models on a development machine.
@@ -223,7 +223,7 @@ Conservative settings suitable for small models on a development machine.
 ### Single GPU production
 
 ```
-grpcserver --ngpu 99 --flash-attn --n-parallel 4 --ctx-size 4096 --batch-size 2048
+llamacppserver --ngpu 99 --flash-attn --n-parallel 4 --ctx-size 4096 --batch-size 2048
 ```
 
 Offload all layers to GPU, enable flash attention, allow 4 concurrent requests.
@@ -231,7 +231,7 @@ Offload all layers to GPU, enable flash attention, allow 4 concurrent requests.
 ### Multi-GPU production (Pipeline Parallelism)
 
 ```
-grpcserver --ngpu 99 --flash-attn --split-mode layer --n-parallel 8 --ctx-size 8192 --batch-size 4096
+llamacppserver --ngpu 99 --flash-attn --split-mode layer --n-parallel 8 --ctx-size 8192 --batch-size 4096
 ```
 
 With multiple GPUs, larger batch sizes enable pipeline parallelism. The model layers
@@ -240,7 +240,7 @@ are automatically distributed across available GPUs.
 ### Multi-GPU production (Tensor Parallelism)
 
 ```
-grpcserver --ngpu 99 --flash-attn --split-mode row --tensor-split 0.5,0.5 --n-parallel 4 --ctx-size 4096
+llamacppserver --ngpu 99 --flash-attn --split-mode row --tensor-split 0.5,0.5 --n-parallel 4 --ctx-size 4096
 ```
 
 With 2 identical GPUs and latency-sensitive workloads, tensor parallelism can reduce
@@ -283,7 +283,7 @@ strategy, see [CONTINUOUS_BATCHING.md](CONTINUOUS_BATCHING.md).
 
 ## Testing Parallel Inference
 
-The `grpcclienttest` includes a `parallel` test mode that verifies the server handles
+The `llamacppclienttest` includes a `parallel` test mode that verifies the server handles
 concurrent requests correctly:
 
 ```bash
@@ -294,7 +294,7 @@ make run-paralleltest MODEL_PATH=/path/to/model.gguf
 make run-paralleltest MODEL_PATH=/path/to/model.gguf PARALLEL_N=8
 
 # Or directly:
-./cmd/grpcclienttest/grpcclienttest --server ./cmd/grpcserver/grpcserver \
+./cmd/llamacppclienttest/llamacppclienttest --server ./cmd/llamacppserver/llamacppserver \
     --model /path/to/model.gguf --test-mode parallel --parallel-n 4
 ```
 
@@ -332,7 +332,8 @@ Concurrency:
 
 Network:
   --host ADDR          Bind address (default: 127.0.0.1)
-  --port PORT          Listen port (default: 50051)
+  --grpc-port PORT          gRPC listen port (default: 50051)
+  --http-port PORT     HTTP+SSE listen port (disabled if empty)
 ```
 
 ## Further Reading

@@ -35,7 +35,7 @@ services:
       - ${MODEL_PATH:?MODEL_PATH is required}:/models/model.gguf:ro
     environment:
       - LD_LIBRARY_PATH=/app
-    command: ["--port", "50051"]
+    command: ["--grpc-port", "50051"]
     healthcheck:
       # Simple TCP health check (gRPC port is open)
       test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/50051' || exit 1"]
@@ -61,7 +61,7 @@ services:
     # Note: --model path is the path INSIDE THE SERVER container (via gRPC LoadModel)
     command: >
       --host server
-      --port 50051
+      --grpc-port 50051
       --model /models/model.gguf
       --test-mode ${TEST_MODE:-greedy}
       --temperature 0
@@ -85,5 +85,5 @@ services:
       - ${MODEL_PATH:?MODEL_PATH is required}:/models/model.gguf:ro
     environment:
       - LD_LIBRARY_PATH=/app
-    command: ["--port", "50051"]
+    command: ["--grpc-port", "50051"]
     restart: unless-stopped

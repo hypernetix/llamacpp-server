@@ -14,7 +14,9 @@ import (
 
 	"github.com/hypernetix/llamacpp_server/api/proto"
 	llamacppbindings "github.com/hypernetix/llamacpp_server/internal/bindings"
-	llamacppgrpcserver "github.com/hypernetix/llamacpp_server/internal/grpcserver"
+	"github.com/hypernetix/llamacpp_server/internal/grpcserver"
+	"github.com/hypernetix/llamacpp_server/internal/httpserver"
+	"github.com/hypernetix/llamacpp_server/internal/llmservice"
 	"github.com/hypernetix/llamacpp_server/internal/logging"
 
 	flags "github.com/jessevdk/go-flags"
@@ -23,7 +25,8 @@ import (
 
 type flagOptions struct {
 	Host         string `long:"host" default:"127.0.0.1" description:"host address to bind (use 0.0.0.0 for Docker)"`
-	Port         string `long:"port" default:"50051" description:"port to listen for gRPC server"`
+	GRPCPort     string `long:"grpc-port" default:"50052" description:"port for gRPC server (disabled if empty)"`
+	HTTPPort     string `long:"http-port" default:"50051" description:"port for HTTP+SSE server (disabled if empty)"`
 	NGpuLayers   int    `long:"ngpu" default:"99" description:"number of GPU layers"`
 	UseMmap      bool   `long:"mmap" description:"use mmap"`
 	SplitMode    string `long:"split-mode" default:"layer" description:"how to split model across GPUs: none, layer, row (row=tensor parallelism)"`
@@ -48,33 +51,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	port, err := strconv.Atoi(opts.Port)
-	if err != nil {
-		fmt.Printf("Command line flags parsing failed: %v", err)
-		os.Exit(1)
-	}
-
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", opts.Host, port))
-	if err != nil {
-		fmt.Printf("Failed to listen at %s:%d: %v", opts.Host, port, err)
+	if opts.GRPCPort == "" && opts.HTTPPort == "" {
+		fmt.Printf("gRPC port or HTTP port is required")
 		os.Exit(1)
 	}
 
 	logger := logging.NewSprintfLogger()
 
-	logger.Infof("Listening at %s", listener.Addr().String())
-
-	logger.Infof("Initializing llama.cpp...")
-
-	llamacppbindings.Initialize(logger.With("module", "llama.cpp"))
-
-	logger.Infof("Starting LLM gRPC server...")
-
-	grpcServer := grpc.NewServer(
-		grpc.WriteBufferSize(1*1024*1024),
-		grpc.InitialWindowSize(1*1024*1024),
-		grpc.InitialConnWindowSize(1*1024*1024),
-	)
+	// --- Parse model options ---
 
 	splitMode := llamacppbindings.SplitModeLayer
 	switch strings.ToLower(opts.SplitMode) {
@@ -101,15 +85,20 @@ func main() {
 		}
 	}
 
-	llmServerOptions := llamacppgrpcserver.GlobalOptions{
-		Model: llamacppgrpcserver.LoadModelOptions{
+	// --- Initialize llama.cpp and create shared service ---
+
+	logger.Infof("Initializing llama.cpp...")
+	llamacppbindings.Initialize(logger.With("module", "llama.cpp"))
+
+	serviceOpts := llmservice.Options{
+		Model: llmservice.LoadModelOptions{
 			NGpuLayers:  opts.NGpuLayers,
 			UseMmap:     opts.UseMmap,
 			SplitMode:   splitMode,
 			MainGpu:     opts.MainGpu,
 			TensorSplit: tensorSplit,
 		},
-		Predict: llamacppgrpcserver.PredictOptions{
+		Predict: llmservice.PredictOptions{
 			FlashAttn:     opts.FlashAttn,
 			NParallel:     opts.NParallel,
 			NThreads:      opts.Threads,
@@ -131,20 +120,70 @@ func main() {
 	if opts.FlashAttn {
 		logger.Infof("Flash attention: enabled")
 	}
-	llmServer := llamacppgrpcserver.NewLLMServer(llmServerOptions, logger)
 
-	proto.RegisterLLMServerServer(grpcServer, llmServer)
-	go func() {
-		err := grpcServer.Serve(listener)
+	service := llmservice.NewService(serviceOpts, logger)
+
+	// --- Start gRPC server (if configured) ---
+
+	var grpcServer *grpc.Server
+	if opts.GRPCPort != "" {
+		grpcPort, err := strconv.Atoi(opts.GRPCPort)
 		if err != nil {
-			logger.Errorf("LLM gRPC server Serve failed: %v", err)
-			return
+			fmt.Printf("Invalid gRPC port: %v", err)
+			os.Exit(1)
 		}
-	}()
+
+		grpcListener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", opts.Host, grpcPort))
+		if err != nil {
+			fmt.Printf("Failed to listen for gRPC at %s:%d: %v", opts.Host, grpcPort, err)
+			os.Exit(1)
+		}
+
+		grpcServer = grpc.NewServer(
+			grpc.WriteBufferSize(1*1024*1024),
+			grpc.InitialWindowSize(1*1024*1024),
+			grpc.InitialConnWindowSize(1*1024*1024),
+		)
+
+		proto.RegisterLLMServerServer(grpcServer, grpcserver.NewServer(service, logger))
+
+		logger.Infof("gRPC server listening at %s", grpcListener.Addr().String())
+		go func() {
+			if err := grpcServer.Serve(grpcListener); err != nil {
+				logger.Errorf("gRPC server Serve failed: %v", err)
+			}
+		}()
+	}
+
+	// --- Start HTTP server (if configured) ---
+
+	var httpSrv *httpserver.Server
+	if opts.HTTPPort != "" {
+		httpPort, err := strconv.Atoi(opts.HTTPPort)
+		if err != nil {
+			fmt.Printf("Invalid HTTP port: %v\n", err)
+			os.Exit(1)
+		}
+
+		httpListener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", opts.Host, httpPort))
+		if err != nil {
+			fmt.Printf("Failed to listen for HTTP at %s:%d: %v", opts.Host, httpPort, err)
+			os.Exit(1)
+		}
+
+		httpSrv = httpserver.NewServer(service, httpListener.Addr().String(), logger)
+		go func() {
+			if err := httpSrv.Start(httpListener); err != nil && err.Error() != "http: Server closed" {
+				logger.Errorf("HTTP server failed: %v", err)
+			}
+		}()
+	}
+
+	// --- Wait for shutdown signal ---
 
 	sig := make(chan os.Signal, 1)
 	if runtime.GOOS == "windows" {
-		signal.Notify(sig) // Unix signals not implemented on Windows
+		signal.Notify(sig)
 	} else {
 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	}
@@ -159,33 +198,41 @@ func main() {
 	}
 
 	logger.Infof("Received signal: %v", receivedSignal)
-
 	logger.Infof("Stopping...")
 
-	// Create a timeout context for graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
-	// Stop components in reverse order of creation
-	logger.Infof("Stopping LLM server...")
-	llmServer.Stop()
-	logger.Infof("LLM server stopped")
+	// Stop inference service first (drains in-flight predictions)
+	logger.Infof("Stopping inference service...")
+	service.Stop()
+	logger.Infof("Inference service stopped")
 
-	logger.Infof("Stopping gRPC server...")
-	// Use GracefulStop instead of Stop for graceful shutdown
-	stopped := make(chan struct{})
-	go func() {
-		grpcServer.GracefulStop()
-		close(stopped)
-	}()
+	// Stop HTTP server
+	if httpSrv != nil {
+		logger.Infof("Stopping HTTP server...")
+		if err := httpSrv.Shutdown(ctx); err != nil {
+			logger.Errorf("HTTP server shutdown error: %v", err)
+		}
+		logger.Infof("HTTP server stopped")
+	}
 
-	// Wait for graceful shutdown or timeout
-	select {
-	case <-stopped:
-		logger.Infof("gRPC server stopped gracefully")
-	case <-ctx.Done():
-		logger.Infof("Shutdown timed out, forcing stop")
-		grpcServer.Stop()
+	// Stop gRPC server
+	if grpcServer != nil {
+		logger.Infof("Stopping gRPC server...")
+		stopped := make(chan struct{})
+		go func() {
+			grpcServer.GracefulStop()
+			close(stopped)
+		}()
+
+		select {
+		case <-stopped:
+			logger.Infof("gRPC server stopped gracefully")
+		case <-ctx.Done():
+			logger.Infof("Shutdown timed out, forcing gRPC server stop")
+			grpcServer.Stop()
+		}
 	}
 
 	logger.Infof("Stopped")

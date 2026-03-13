@@ -1,4 +1,4 @@
-# llama.cpp Go gRPC Server
+# llama.cpp Go Server
 
 A Go project for serving Large Language Models locally using **LLaMA.cpp** with gRPC interface.
 
@@ -18,8 +18,8 @@ A Go project for serving Large Language Models locally using **LLaMA.cpp** with 
 # Full build: download binaries + build all Go executables
 make all
 
-# Run client test, it will run, connect and send test request to gRPC server with a specified model
-make run-grpcclienttest MODEL_PATH=/path/to/your/model.gguf
+# Run client test, it will run, connect and send test request to llamacpp server with a specified model
+make run-llamacppclienttest MODEL_PATH=/path/to/your/model.gguf
 ```
 
 ### Quick Start with Docker
@@ -88,8 +88,8 @@ brew install go
 ### Individual Build Targets
 
 ```bash
-make build-grpcserver      # Build gRPC server
-make build-grpcclienttest  # Build gRPC client test
+make build-llamacppserver      # Build llamacpp server
+make build-llamacppclienttest  # Build llamacpp client test
 make build-inferencetest1  # Build inference test 1
 make build-inferencetest2  # Build inference test 2
 ```
@@ -97,17 +97,17 @@ make build-inferencetest2  # Build inference test 2
 ### Run Targets
 
 ```bash
-# Start gRPC server (default port 50052)
-make run-grpcserver
+# Start llamacpp server (default gRPC port 50052)
+make run-llamacppserver
 
 # Start server on custom port
-make run-grpcserver GRPC_PORT=50053
+make run-llamacppserver GRPC_PORT=50053
 
 # Run tests (MODEL_PATH required)
 make run-inferencetest1 MODEL_PATH=/path/to/model.gguf
 make run-inferencetest2 MODEL_PATH=/path/to/model.gguf
-make run-grpcclienttest SERVER_PATH='' ATTACH_GRPC_PORT=50053 MODEL_PATH=/path/to/model.gguf # send request to an already running gRPC server
-make run-grpcclienttest MODEL_PATH=/path/to/model.gguf # run the gRPC server at dynamic port, then send request to it
+make run-llamacppclienttest SERVER_PATH='' ATTACH_GRPC_PORT=50053 MODEL_PATH=/path/to/model.gguf # send request to an already running llamacpp server
+make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf # run the llamacpp server at dynamic port, then send request to it
 ```
 
 ### Docker Targets
@@ -115,8 +115,8 @@ make run-grpcclienttest MODEL_PATH=/path/to/model.gguf # run the gRPC server at 
 | Target | Description |
 |--------|-------------|
 | `make docker-build` | Build all Docker images (server + client) |
-| `make docker-build-server` | Build gRPC server Docker image |
-| `make docker-build-client` | Build client test Docker image |
+| `make docker-build-server` | Build llamacpp server Docker image |
+| `make docker-build-client` | Build llamacpp client test Docker image |
 | `make docker-integration-test MODEL_PATH=<path>` | Run integration test with local model |
 | `make docker-integration-test-ci` | Run integration test (downloads test model) |
 | `make docker-clean` | Remove Docker images and volumes |
@@ -127,9 +127,11 @@ make run-grpcclienttest MODEL_PATH=/path/to/model.gguf # run the gRPC server at 
 |----------|---------|-------------|
 | `LLAMA_VERSION` | `b6770` | llama.cpp release version to download |
 | `GRPC_PORT` | `50052` | gRPC server port |
+| `HTTP_PORT` | `50051` | HTTP+SSE server port |
 | `MODEL_PATH` | (none) | Path to GGUF model file (required for tests) |
-| `ATTACH_GRPC_PORT` | (none) | Port of already running gRPC server, for grpcclienttest |
-| `GRPC_SERVER_PATH` | (auto) | Path of gRPC server executable to run, for grpcclienttest |
+| `ATTACH_GRPC_PORT` | (none) | Port of already running gRPC server, for llamacppclienttest |
+| `ATTACH_HTTP_PORT` | (none) | Port of already running HTTP+SSE server, for llamacppclienttest |
+| `SERVER_PATH` | (auto) | Path of gRPC server executable to run, for llamacppclienttest |
 | `IMAGE_TAG` | `latest` | Docker image tag |
 
 ### Using Different llama.cpp Versions
@@ -158,12 +160,12 @@ make docker-build LLAMA_VERSION=b6800
 ├── api/
 │   └── proto/               # Protocol buffer definitions
 ├── cmd/
-│   ├── grpcserver/          # gRPC server application
-│   ├── grpcclienttest/      # gRPC client test
+│   ├── llamacppserver/      # llama.cpp server application
+│   ├── llamacppclienttest/  # llama.cpp client test
 │   ├── inferencetest1/      # Direct inference test 1
 │   └── inferencetest2/      # Direct inference test 2
 ├── docker/
-│   ├── Dockerfile.server    # gRPC server Docker image
+│   ├── Dockerfile.server    # llama.cpp server Docker image
 │   ├── Dockerfile.client    # Client test Docker image
 │   ├── docker-compose.yml   # Local integration testing
 │   └── docker-compose.ci.yml # CI integration testing
@@ -173,6 +175,9 @@ make docker-build LLAMA_VERSION=b6800
 ├── internal/
 │   ├── bindings/            # CGO bindings to llama.cpp
 │   ├── grpcserver/          # gRPC server implementation
+│   ├── httpserver/          # HTTP server implementation
+│   ├── inference/           # Model inference
+│   ├── llmservice/          # Protocol-agnostic service implementation
 │   ├── logging/             # Logging utilities
 │   └── modelmanagement/     # Model loading and caching
 └── .github/
@@ -186,13 +191,13 @@ make docker-build LLAMA_VERSION=b6800
 
 ```bash
 # Start server (binds to 127.0.0.1 by default)
-./cmd/grpcserver/grpcserver --port 50052
+./cmd/llamacppserver/llamacppserver --grpc-port 50052
 
 # Start server binding to all interfaces (for Docker/remote access)
-./cmd/grpcserver/grpcserver --host 0.0.0.0 --port 50052
+./cmd/llamacppserver/llamacppserver --host 0.0.0.0 --grpc-port 50052
 
 # Or via make
-make run-grpcserver GRPC_PORT=50052
+make run-llamacppserver GRPC_PORT=50052
 ```
 
 #### Server Command Line Options
@@ -200,7 +205,7 @@ make run-grpcserver GRPC_PORT=50052
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--host` | `127.0.0.1` | Host address to bind (use `0.0.0.0` for Docker) |
-| `--port` | `50051` | Port to listen for gRPC connections |
+| `--grpc-port` | `50051` | Port to listen for gRPC connections |
 | `--ngpu` | `99` | Number of GPU layers to offload |
 | `--mmap` | `false` | Use memory-mapped I/O for model loading |
 
@@ -208,10 +213,10 @@ make run-grpcserver GRPC_PORT=50052
 
 ```bash
 # Run client test against running server
-./cmd/grpcclienttest/grpcclienttest --host 127.0.0.1 --port 50052 --model /path/to/model.gguf
+./cmd/llamacppclienttest/llamacppclienttest --host 127.0.0.1 --grpc-port 50052 --model /path/to/model.gguf
 
 # Or via make
-make run-grpcclienttest MODEL_PATH=/path/to/model.gguf
+make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf
 ```
 
 #### Client Test Command Line Options
@@ -219,7 +224,7 @@ make run-grpcclienttest MODEL_PATH=/path/to/model.gguf
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--host` | `127.0.0.1` | Server host address to connect to |
-| `--port` | (none) | Server port to connect to |
+| `--grpc-port` | (none) | Server port to connect to |
 | `--server` | (none) | Path to server executable (starts server automatically) |
 | `--model` | (none) | Path to GGUF model file (required) |
 | `--temperature` | `0.7` | Sampling temperature |
@@ -293,7 +298,7 @@ MODEL_PATH=/path/to/model.gguf docker compose -f docker/docker-compose.yml up se
 
 ### Using in Other Projects
 
-The gRPC server Docker image can be used as a dependency in other projects:
+The llamacpp server Docker image can be used as a dependency in other projects:
 
 ```yaml
 # In your project's docker-compose.yml
@@ -317,7 +322,7 @@ services:
 
 ## API Documentation
 
-The gRPC server implements the interface defined in `api/proto/llmserver.proto`:
+The llamacpp server implements the gRPC interface defined in `api/proto/llmserver.proto`:
 
 ### LoadModel
 
@@ -361,7 +366,7 @@ The Dockerfiles use the same Makefile for consistency:
 RUN make prepare LLAMA_VERSION=${LLAMA_VERSION}
 
 # Uses Makefile to build the server
-RUN make build-grpcserver
+RUN make build-llamacppserver
 ```
 
 This ensures Docker builds are identical to local builds.

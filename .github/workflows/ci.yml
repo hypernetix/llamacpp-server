@@ -173,9 +173,9 @@ jobs:
         run: make run-inferencetest2 MODEL_PATH=models/${{ env.TEST_MODEL_NAME }}
         timeout-minutes: 5
       
-      # Step 14: Run gRPC client test
-      - name: Run gRPC client test
-        run: make run-grpcclienttest MODEL_PATH=models/${{ env.TEST_MODEL_NAME }}
+      # Step 14: Run llamacpp client test
+      - name: Run llamacpp client test
+        run: make run-llamacppclienttest MODEL_PATH=models/${{ env.TEST_MODEL_NAME }}
         timeout-minutes: 5
       
       # Step 15: Upload build artifacts
@@ -184,8 +184,8 @@ jobs:
         with:
           name: binaries-${{ matrix.os }}-${{ github.sha }}
           path: |
-            cmd/grpcserver/grpcserver*
-            cmd/grpcclienttest/grpcclienttest*
+            cmd/llamacppserver/llamacppserver*
+            cmd/llamacppclienttest/llamacppclienttest*
             cmd/inferencetest1/inferencetest1*
             cmd/inferencetest2/inferencetest2*
             !cmd/**/*.dll

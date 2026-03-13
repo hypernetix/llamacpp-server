@@ -214,7 +214,7 @@ separate-context baseline. They require a GPU.
 
 ### Test Implementation Plan
 
-1. **Extend `grpcclienttest`** with a `--continuous-batching` flag that tells the server
+1. **Extend `llamacppclienttest`** with a `--continuous-batching` flag that tells the server
    to use the new mode. The existing `parallel` test mode already launches N concurrent
    requests and validates responses — the same harness works for both modes.
 

@@ -1,33 +1,13 @@
-package llamacppgrpcserver
+package llmservice
 
 import (
 	"fmt"
 	"time"
 
 	llamacppbindings "github.com/hypernetix/llamacpp_server/internal/bindings"
+	"github.com/hypernetix/llamacpp_server/internal/inference"
 	"github.com/hypernetix/llamacpp_server/internal/logging"
 )
-
-type PredictCommandStreamFunc func(token, tokens int, message string) error
-
-type PredictCommandArgs struct {
-	NPredict          int
-	Temp              float32
-	TopP              float32
-	TopK              int32
-	MinP              float32
-	MinTokensToKeep   int
-	MaxKvSize         int
-	PrefillStepSize   int
-	KvBits            int
-	KvGroupSize       int
-	QuantizedKvStart  int
-	RepetitionPenalty float32
-	LengthPenalty     float32
-	DiversityPenalty  float32
-	NoRepeatNgramSize int
-	RandomSeed        int
-}
 
 type PredictOptions struct {
 	FlashAttn     bool
@@ -38,7 +18,7 @@ type PredictOptions struct {
 	BatchSize     int
 }
 
-func NewPredictFunc(options PredictOptions, logger logging.SprintfLogger) PredictFunc {
+func newPredictFunc(options PredictOptions, logger logging.SprintfLogger) inference.PredictFunc {
 	cmd := &predictCmd{
 		options: options,
 		logger:  logger.With("module", "predictCmd"),
@@ -46,21 +26,18 @@ func NewPredictFunc(options PredictOptions, logger logging.SprintfLogger) Predic
 	return cmd.Do
 }
 
-type PredictFunc func(model *llamacppbindings.Model, prompt string, args PredictCommandArgs, stream PredictCommandStreamFunc) (string, error)
-
 type predictCmd struct {
 	options PredictOptions
 	logger  logging.SprintfLogger
 }
 
-func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args PredictCommandArgs, stream PredictCommandStreamFunc) (string, error) {
+func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args inference.PredictArgs, stream inference.StreamFunc) (string, error) {
 	startTime := time.Now()
 	cmd.logger.Infof("Do: Starting text generation")
 	cmd.logger.Infof("Do: Model info: %+v", model.Info())
 	cmd.logger.Debugf("Do: Prompt: %q", prompt)
 	cmd.logger.Infof("Do: Generation parameters: %+v", args)
 
-	// Get vocabulary information
 	vocab := model.Vocab()
 	vocabInfo := vocab.Info()
 	nVocab := vocab.NTokens()
@@ -100,7 +77,6 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 	cmd.logger.Infof("Do: Context created successfully - available: %d, used: %d",
 		context.NCells(), context.NCellsUsed())
 
-	// Build sophisticated sampler chain
 	cmd.logger.Infof("Do: ===== BUILDING SAMPLER CHAIN =====")
 
 	samplerChainParams := llamacppbindings.NewSamplerChainDefaultParams()
@@ -111,25 +87,18 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 	}
 	defer samplerChain.Free()
 
-	// Add samplers in the correct order (this order matters!)
-	// 1. Penalties (repetition control) - should be first
 	if args.RepetitionPenalty != 1.0 {
 		cmd.logger.Infof("Do: ✓ Attempting to add penalties sampler (repetition=%.3f)", args.RepetitionPenalty)
-		// Based on llama.cpp common parameters:
-		// penalty_last_n: number of last tokens to consider (typically 64 or -1 for context size)
-		// penalty_repeat: the repetition penalty (args.RepetitionPenalty)
-		// penalty_freq: frequency penalty (0.0 = disabled, we don't have this parameter)
-		// penalty_present: presence penalty (0.0 = disabled, we don't have this parameter)
-		penaltyLastN := 64 // Standard value, can be adjusted
+		penaltyLastN := 64
 		if penaltyLastN > context.NCells() {
-			penaltyLastN = context.NCells() // Use full context if smaller
+			penaltyLastN = context.NCells()
 		}
 
 		penaltiesSampler, err := llamacppbindings.NewPenaltiesSampler(
-			penaltyLastN,           // penalty_last_n
-			args.RepetitionPenalty, // penalty_repeat
-			0.0,                    // penalty_freq (not supported in our args)
-			0.0,                    // penalty_present (not supported in our args)
+			penaltyLastN,
+			args.RepetitionPenalty,
+			0.0,
+			0.0,
 		)
 		if err != nil {
 			cmd.logger.Errorf("Do: Failed to create penalties sampler: %v", err)
@@ -142,7 +111,6 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 		cmd.logger.Infof("Do: ⚪ Skipping penalties sampler (penalty=1.0)")
 	}
 
-	// 2. Top-K filtering
 	if args.TopK > 0 {
 		cmd.logger.Infof("Do: ✓ Attempting to add top-k sampler (k=%d)", args.TopK)
 		topKSampler, err := llamacppbindings.NewTopKSampler(int(args.TopK))
@@ -157,7 +125,6 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 		cmd.logger.Infof("Do: ⚪ Skipping top-k sampler (k=%d)", args.TopK)
 	}
 
-	// 3. Top-P (nucleus) filtering
 	if args.TopP > 0.0 && args.TopP < 1.0 {
 		cmd.logger.Infof("Do: ✓ Attempting to add top-p sampler (p=%.3f, min_keep=%d)",
 			args.TopP, args.MinTokensToKeep)
@@ -173,7 +140,6 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 		cmd.logger.Infof("Do: ⚪ Skipping top-p sampler (p=%.3f)", args.TopP)
 	}
 
-	// 4. Min-P filtering
 	if args.MinP > 0.0 {
 		cmd.logger.Infof("Do: ✓ Adding min-p sampler (p=%.3f, min_keep=%d)",
 			args.MinP, args.MinTokensToKeep)
@@ -188,7 +154,6 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 		cmd.logger.Infof("Do: ⚪ Skipping min-p sampler (p=%.3f)", args.MinP)
 	}
 
-	// 5. Temperature scaling
 	if args.Temp > 0.0 {
 		cmd.logger.Infof("Do: ✓ Adding temperature sampler (temp=%.3f)", args.Temp)
 		tempSampler, err := llamacppbindings.NewTempSampler(args.Temp)
@@ -202,8 +167,7 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 		cmd.logger.Infof("Do: ⚪ Using greedy sampling (temp=%.3f)", args.Temp)
 	}
 
-	// 6. Final distribution sampler (for randomness/seed control)
-	var seed uint32 = 0xFFFFFFFF // Default random seed
+	var seed uint32 = 0xFFFFFFFF
 	if args.RandomSeed >= 0 {
 		seed = uint32(args.RandomSeed)
 		cmd.logger.Infof("Do: ✓ Adding distribution sampler (seed=%d)", seed)
@@ -223,7 +187,6 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 
 	sampler := samplerChain.Sampler()
 
-	// Tokenize the prompt
 	cmd.logger.Infof("Do: Tokenizing prompt...")
 	isFirst := context.NCellsUsed() == 0
 	tokens, err := vocab.Tokenize(prompt, isFirst, true)
@@ -235,12 +198,11 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 	inputTokensCount := len(tokens)
 	cmd.logger.Infof("Do: Tokenized prompt into %d tokens: %v", inputTokensCount, tokens)
 
-	// Validate context size
 	maxContextSize := context.NCells()
 	if inputTokensCount+args.NPredict > maxContextSize {
 		cmd.logger.Warnf("Do: Prompt + generation (%d + %d = %d) exceeds context size (%d), adjusting...",
 			inputTokensCount, args.NPredict, inputTokensCount+args.NPredict, maxContextSize)
-		args.NPredict = maxContextSize - inputTokensCount - 10 // Leave some buffer
+		args.NPredict = maxContextSize - inputTokensCount - 10
 		if args.NPredict < 0 {
 			return "", fmt.Errorf("prompt too long for context size")
 		}
@@ -264,19 +226,16 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 		cmd.logger.Debugf("Do: Loop iteration - pos=%d, batch_size=%d, ctx_used=%d/%d, generated=%d/%d",
 			pos, nBatch, nUsed, nCells, generatedTokens, args.NPredict)
 
-		// Check if we should stop generation
 		if args.NPredict > 0 && generatedTokens >= args.NPredict {
 			cmd.logger.Infof("Do: Reached max tokens limit (%d)", args.NPredict)
 			break
 		}
 
-		// Check if context is full
 		if nUsed+nBatch > nCells {
 			cmd.logger.Errorf("Do: Context size exceeded (%d + %d > %d)", nUsed, nBatch, nCells)
 			return "", fmt.Errorf("context size exceeded")
 		}
 
-		// Decode the batch
 		err := context.Decode(batch)
 		if err != nil {
 			if err == llamacppbindings.ErrKvCacheFull {
@@ -289,10 +248,8 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 
 		pos += nBatch
 
-		// Sample next token
 		nextToken := sampler.Sample(context, -1)
 
-		// Check for end-of-generation
 		if vocab.IsEog(nextToken) {
 			cmd.logger.Infof("Do: End-of-generation token encountered, stopping")
 			break
@@ -300,7 +257,6 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 
 		cmd.logger.Debugf("Do: Sampled token: %d", nextToken)
 
-		// Convert token to text
 		piece, err := vocab.TokenToPiece(nextToken)
 		if err != nil {
 			cmd.logger.Errorf("Do: Failed to convert token to text: %v", err)
@@ -309,7 +265,6 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 
 		cmd.logger.Debugf("Do: Token piece: %q", piece)
 
-		// Send streaming response or accumulate
 		if stream != nil {
 			err := stream(nextToken, len(tokens)+generatedTokens, piece)
 			if err != nil {
@@ -321,11 +276,9 @@ func (cmd *predictCmd) Do(model *llamacppbindings.Model, prompt string, args Pre
 
 		generatedTokens++
 
-		// Create batch for next token
 		batch = llamacppbindings.NotOwnedOneItemBatch([]int{nextToken})
 	}
 
-	// Calculate performance metrics
 	generationTime := time.Since(generationStartTime)
 	totalTime := time.Since(startTime)
 	throughput := float64(generatedTokens) / generationTime.Seconds()
