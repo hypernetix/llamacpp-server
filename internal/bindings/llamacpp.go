@@ -121,6 +121,13 @@ func GetModelArch(modelPath string) (string, error) {
 	return C.GoString(arch), nil
 }
 
+// llama_split_mode values — must match enum llama_split_mode in llama.h
+const (
+	SplitModeNone  = 0 // single GPU
+	SplitModeLayer = 1 // split layers and KV across GPUs (pipeline parallelism)
+	SplitModeRow   = 2 // split rows across GPUs (tensor parallelism)
+)
+
 type ModelParams struct {
 	impl              C.struct_llama_model_params
 	progressHandlePin *runtime.Pinner
@@ -138,6 +145,17 @@ func (p *ModelParams) SetNGpuLayers(nGpuLayers int) {
 
 func (p *ModelParams) SetMainGpu(mainGpu int) {
 	p.impl.main_gpu = C.int32_t(mainGpu)
+}
+
+func (p *ModelParams) SetSplitMode(splitMode int) {
+	switch splitMode {
+	case SplitModeRow:
+		p.impl.split_mode = 2
+	case SplitModeNone:
+		p.impl.split_mode = 0
+	default:
+		p.impl.split_mode = 1
+	}
 }
 
 func (p *ModelParams) SetUseMmap(useMmap bool) {

@@ -7,8 +7,11 @@ import (
 )
 
 type LoadModelOptions struct {
-	NGpuLayers int
-	UseMmap    bool
+	NGpuLayers  int
+	UseMmap     bool
+	SplitMode   int       // 0=none, 1=layer (PP), 2=row (TP)
+	MainGpu     int
+	TensorSplit []float32
 }
 
 type ModelData struct {
@@ -42,6 +45,11 @@ func (cmd *loadModelCmd) Do(path string, progress modelmanagement.LoadModelProgr
 	modelParams := llamacppbindings.NewModelDefaultParams()
 	modelParams.SetNGpuLayers(cmd.options.NGpuLayers)
 	modelParams.SetUseMmap(cmd.options.UseMmap)
+	modelParams.SetSplitMode(cmd.options.SplitMode)
+	modelParams.SetMainGpu(cmd.options.MainGpu)
+	if len(cmd.options.TensorSplit) > 0 {
+		modelParams.SetTensorSplit(cmd.options.TensorSplit)
+	}
 	modelParams.SetProgressCallback(progress)
 
 	cmd.logger.Debugf("Do: modelParams: %+v", modelParams)

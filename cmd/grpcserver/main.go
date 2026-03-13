@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,6 +26,9 @@ type flagOptions struct {
 	Port         string `long:"port" default:"50051" description:"port to listen for gRPC server"`
 	NGpuLayers   int    `long:"ngpu" default:"99" description:"number of GPU layers"`
 	UseMmap      bool   `long:"mmap" description:"use mmap"`
+	SplitMode    string `long:"split-mode" default:"layer" description:"how to split model across GPUs: none, layer, row (row=tensor parallelism)"`
+	MainGpu      int    `long:"main-gpu" default:"0" description:"main GPU index when split-mode=none"`
+	TensorSplit  string `long:"tensor-split" default:"" description:"GPU split proportions, comma-separated (e.g. '0.5,0.5' for even 2-GPU split)"`
 	FlashAttn    bool   `long:"flash-attn" description:"enable flash attention for faster inference"`
 	NParallel    int    `long:"n-parallel" default:"0" description:"max concurrent inference requests (0=unlimited)"`
 	Threads      int    `long:"threads" default:"0" description:"number of threads for generation (0=auto-detect)"`
@@ -72,10 +76,38 @@ func main() {
 		grpc.InitialConnWindowSize(1*1024*1024),
 	)
 
+	splitMode := llamacppbindings.SplitModeLayer
+	switch strings.ToLower(opts.SplitMode) {
+	case "none":
+		splitMode = llamacppbindings.SplitModeNone
+	case "layer":
+		splitMode = llamacppbindings.SplitModeLayer
+	case "row":
+		splitMode = llamacppbindings.SplitModeRow
+	default:
+		logger.Errorf("Unknown split-mode %q, using 'layer'", opts.SplitMode)
+	}
+
+	var tensorSplit []float32
+	if opts.TensorSplit != "" {
+		for _, s := range strings.Split(opts.TensorSplit, ",") {
+			s = strings.TrimSpace(s)
+			v, err := strconv.ParseFloat(s, 32)
+			if err != nil {
+				fmt.Printf("Invalid tensor-split value %q: %v\n", s, err)
+				os.Exit(1)
+			}
+			tensorSplit = append(tensorSplit, float32(v))
+		}
+	}
+
 	llmServerOptions := llamacppgrpcserver.GlobalOptions{
 		Model: llamacppgrpcserver.LoadModelOptions{
-			NGpuLayers: opts.NGpuLayers,
-			UseMmap:    opts.UseMmap,
+			NGpuLayers:  opts.NGpuLayers,
+			UseMmap:     opts.UseMmap,
+			SplitMode:   splitMode,
+			MainGpu:     opts.MainGpu,
+			TensorSplit: tensorSplit,
 		},
 		Predict: llamacppgrpcserver.PredictOptions{
 			FlashAttn:     opts.FlashAttn,
@@ -87,6 +119,10 @@ func main() {
 		},
 	}
 
+	logger.Infof("Split mode: %s", opts.SplitMode)
+	if len(tensorSplit) > 0 {
+		logger.Infof("Tensor split: %v", tensorSplit)
+	}
 	if opts.NParallel > 0 {
 		logger.Infof("Max concurrent predictions: %d", opts.NParallel)
 	} else {

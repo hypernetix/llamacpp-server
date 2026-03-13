@@ -61,13 +61,12 @@ on its layers, GPU 2 can process sub-batch B on its layers, forming a pipeline.
    - When `n_batch > n_ubatch`, the batch is split into micro-batches that can be
      pipelined across devices.
 
-### Status in llamacpp-server
-
-PP is automatically enabled by llama.cpp when the model is distributed across multiple
-GPUs via `--ngpu`. The server exposes:
+### Server flags
 
 ```
 --ngpu N             Number of GPU layers to offload (default: 99)
+--split-mode layer   Layer-based split across GPUs (default)
+--tensor-split P,P   Proportional GPU distribution (e.g. '0.6,0.4')
 --batch-size N       Batch size / n_batch (default: 2048)
 ```
 
@@ -86,23 +85,59 @@ active when multiple GPUs are available.
 Tensor parallelism splits individual tensor operations across multiple GPUs. Each GPU
 computes a portion of every layer, and results are combined via AllReduce.
 
-### Status
+### How it works
 
-As of llama.cpp b8292, TP is available via the "split mode tensor" implementation
-(merged in early 2026 via PR #19378). Current limitations:
+llama.cpp exposes TP via the `split_mode` model parameter:
 
-- Only works with dense (non-MoE) models.
-- Requires exactly 2 GPUs with equal VRAM.
-- Must be enabled with `--split-mode tensor` when using llama.cpp's own server.
+- **`LLAMA_SPLIT_MODE_NONE` (0)** — use a single GPU only.
+- **`LLAMA_SPLIT_MODE_LAYER` (1)** — split layers across GPUs (pipeline parallelism).
+  This is the default.
+- **`LLAMA_SPLIT_MODE_ROW` (2)** — split rows/tensors across GPUs. This is tensor
+  parallelism. Each GPU computes a portion of every layer, then results are combined.
 
-### Status in llamacpp-server
+### Server flags
 
-The Go bindings expose `SetTensorSplit()` on `ModelParams` for proportional GPU
-distribution. Full TP split-mode configuration is not yet directly exposed via server
-flags, as TP is still considered experimental in upstream llama.cpp.
+```
+--split-mode row     Enable tensor parallelism (split rows across GPUs)
+--tensor-split P,P   Proportional GPU distribution (e.g. '0.5,0.5')
+--main-gpu N         Main GPU index for split-mode=none (default: 0)
+--ngpu N             Number of GPU layers to offload (default: 99)
+```
 
-If you need TP, set `tensor_split` proportions programmatically or use llama.cpp's
-native tools to benchmark before integrating.
+### Example usage
+
+```bash
+# Even 2-GPU tensor parallelism
+grpcserver --ngpu 99 --split-mode row --tensor-split 0.5,0.5
+
+# Uneven split (GPU 0 has more VRAM than GPU 1)
+grpcserver --ngpu 99 --split-mode row --tensor-split 0.7,0.3
+
+# Single GPU (disable multi-GPU)
+grpcserver --ngpu 99 --split-mode none --main-gpu 0
+```
+
+### Current limitations
+
+As of llama.cpp b8292:
+
+- TP works best with dense (non-MoE) models.
+- Best results with 2 GPUs of equal VRAM (use `--tensor-split` to adjust for
+  unequal GPUs).
+- TP is not enabled by default because it is still considered experimental in upstream
+  llama.cpp.
+- Pipeline parallelism (`--split-mode layer`) remains the default and more mature
+  approach for multi-GPU setups.
+
+### When to use TP vs PP
+
+| Scenario | Recommended |
+|----------|-------------|
+| 2 identical GPUs, latency-sensitive | TP (`--split-mode row`) |
+| 2+ GPUs, throughput-oriented | PP (`--split-mode layer`) |
+| Mixed GPU VRAM sizes | PP with `--tensor-split` |
+| MoE models | PP only |
+| Single GPU | `--split-mode none` |
 
 ## Concurrent Request Handling (Slots)
 
@@ -139,13 +174,6 @@ shared read-only across all contexts.
   allocates its own KV cache, so VRAM usage scales with `n_parallel * ctx_size`.
 - **Memory budget**: Each slot allocates `ctx_size` tokens of KV cache. For F16 KV
   with a 7B model and 4096 context, this is roughly 1-2 GB per slot.
-
-### Difference from llama.cpp server
-
-llama.cpp's own HTTP server (`llama-server`) uses a single shared context with
-multiple "slots" and continuous batching to process multiple requests in a single
-`llama_decode` call. llamacpp-server uses separate contexts per request, which is
-simpler but does not benefit from shared-context continuous batching.
 
 ## Flash Attention
 
@@ -203,11 +231,55 @@ Offload all layers to GPU, enable flash attention, allow 4 concurrent requests.
 ### Multi-GPU production (Pipeline Parallelism)
 
 ```
-grpcserver --ngpu 99 --flash-attn --n-parallel 8 --ctx-size 8192 --batch-size 4096
+grpcserver --ngpu 99 --flash-attn --split-mode layer --n-parallel 8 --ctx-size 8192 --batch-size 4096
 ```
 
 With multiple GPUs, larger batch sizes enable pipeline parallelism. The model layers
 are automatically distributed across available GPUs.
+
+### Multi-GPU production (Tensor Parallelism)
+
+```
+grpcserver --ngpu 99 --flash-attn --split-mode row --tensor-split 0.5,0.5 --n-parallel 4 --ctx-size 4096
+```
+
+With 2 identical GPUs and latency-sensitive workloads, tensor parallelism can reduce
+per-request latency by splitting every layer across both GPUs.
+
+## Continuous Batching
+
+Continuous batching (also called dynamic batching) is an optimization where multiple
+concurrent requests share a **single** llama.cpp context. Instead of each request
+getting its own context and KV cache, all requests share one large KV cache, with each
+request isolated by a unique `seq_id`. A scheduler combines tokens from all active
+requests into a single `llama_decode` call per "tick."
+
+This is the approach used by llama.cpp's own HTTP server (`llama-server`) and by
+production inference engines like vLLM and SGLang.
+
+### How it differs from the current approach
+
+The server currently uses **separate contexts**: each gRPC `Predict` call creates an
+independent llama.cpp context with its own KV cache. This is simple and correct, but
+each `llama_decode` call is a separate GPU forward pass.
+
+Continuous batching replaces this with a shared context and a central scheduler that
+batches tokens from all active requests into a single `llama_decode` call. The main
+benefits are:
+
+- **GPU throughput**: One batched forward pass instead of N separate ones (2-8x
+  improvement under concurrency).
+- **VRAM efficiency**: One shared KV cache instead of N independent caches.
+- **Chunked prefill**: Long prompts are interleaved with decode tokens from other
+  requests, preventing prefill stalls.
+
+Continuous batching with `n_parallel=1` degenerates to the same behavior as separate
+contexts, making it a strict superset of the current approach. It is planned to
+eventually supersede the current mode, but will be introduced as an opt-in feature
+first (`--continuous-batching` flag).
+
+For the full implementation plan, architecture details, effort estimate, and rollout
+strategy, see [CONTINUOUS_BATCHING.md](CONTINUOUS_BATCHING.md).
 
 ## Testing Parallel Inference
 
@@ -238,9 +310,37 @@ Even on CPU-only systems, the test verifies that the server handles concurrent r
 without hangs, crashes, or data corruption. Requests may be serialized or run in
 parallel depending on server configuration and system resources.
 
+## All Server Flags Reference
+
+```
+Model loading:
+  --ngpu N             Number of GPU layers to offload (default: 99)
+  --mmap               Use mmap for model loading
+  --split-mode MODE    GPU split: none, layer (default), row (tensor parallelism)
+  --main-gpu N         Main GPU index for split-mode=none (default: 0)
+  --tensor-split P,P   GPU split proportions, comma-separated
+
+Inference:
+  --flash-attn         Enable flash attention
+  --ctx-size N         Context window size per slot (default: 4096)
+  --batch-size N       Batch size for prompt processing (default: 2048)
+  --threads N          Threads for generation, 0=auto (default: 0)
+  --threads-batch N    Threads for batch processing, 0=auto (default: 0)
+
+Concurrency:
+  --n-parallel N       Max concurrent predictions, 0=unlimited (default: 0)
+
+Network:
+  --host ADDR          Bind address (default: 127.0.0.1)
+  --port PORT          Listen port (default: 50051)
+```
+
 ## Further Reading
 
+- [Continuous Batching — Planning Document](CONTINUOUS_BATCHING.md) — implementation
+  plan and rollout strategy for adding continuous batching to llamacpp-server.
 - [llama.cpp Pipeline Parallelism PR #6017](https://github.com/ggml-org/llama.cpp/pull/6017)
 - [llama.cpp Tensor Parallelism Discussion](https://github.com/ggml-org/llama.cpp/discussions/20252)
 - [llama.cpp Server README](https://github.com/ggml-org/llama.cpp/blob/master/examples/server/README.md)
 - [Flash Attention PR #5021](https://github.com/ggml-org/llama.cpp/pull/5021)
+- [LlamaCppEx Continuous Batching ADR](https://hexdocs.pm/llama_cpp_ex/006-continuous-batching.html)
