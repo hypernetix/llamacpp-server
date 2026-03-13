@@ -20,9 +20,10 @@
 # Configuration
 # =============================================================================
 
-# llama.cpp version to download (can be overridden: make LLAMA_VERSION=b8323)
-# Check out for the latest release here: https://github.com/ggml-org/llama.cpp/releases
+# llama.cpp version — single source of truth (override: make LLAMA_VERSION=bXXXX)
+# Latest releases: https://github.com/ggml-org/llama.cpp/releases
 LLAMA_VERSION ?= b8323
+export LLAMA_VERSION
 
 # Build directories (use forward slashes - works everywhere)
 BUILD_DIR := build
@@ -35,7 +36,7 @@ GO_BUILD_FLAGS := -v
 GRPC_PORT ?= 50052
 
 # Default port for HTTP+SSE server (empty = disabled)
-HTTP_PORT ?= 50051
+HTTP_PORT ?= 8082
 
 # Default port for gRPC client test
 ATTACH_GRPC_PORT ?= 0
@@ -125,7 +126,7 @@ endif
 # Main Targets
 # =============================================================================
 
-.PHONY: all prepare build clean help check-deps
+.PHONY: all prepare build clean help check-deps print-llama-version
 .PHONY: download-binaries import-libs
 .PHONY: build-llamacppserver build-llamacppclienttest build-inferencetest1 build-inferencetest2
 .PHONY: run-llamacppserver run-llamacppclienttest run-paralleltest run-inferencetest1 run-inferencetest2
@@ -204,19 +205,26 @@ ifeq ($(OS),Windows_NT)
 	-$(PS) "Move-Item -Path '$(LLAMA_DIR)/*.dll' -Destination '$(LLAMA_DIR)/lib/' -Force -ErrorAction SilentlyContinue"
 	-$(PS) "Move-Item -Path '$(LLAMA_DIR)/*.lib' -Destination '$(LLAMA_DIR)/lib/' -Force -ErrorAction SilentlyContinue"
 else
-	@# Linux/macOS archives may extract to build/bin/ subfolder - handle both cases
-	@if [ -d "$(LLAMA_DIR)/build/bin" ]; then \
+	@# tar.gz archives extract to llama-<version>/ flat directory (b8300+),
+	@# older zips extracted to build/bin/ — handle all cases.
+	@if [ -d "$(LLAMA_DIR)/llama-$(LLAMA_VERSION)" ]; then \
+		echo "Moving files from llama-$(LLAMA_VERSION)/ directory..."; \
+		mv $(LLAMA_DIR)/llama-$(LLAMA_VERSION)/*.so* $(LLAMA_DIR)/lib/ 2>/dev/null || true; \
+		mv $(LLAMA_DIR)/llama-$(LLAMA_VERSION)/*.dylib $(LLAMA_DIR)/lib/ 2>/dev/null || true; \
+		mv $(LLAMA_DIR)/llama-$(LLAMA_VERSION)/LICENSE* $(LLAMA_DIR)/ 2>/dev/null || true; \
+		mv $(LLAMA_DIR)/llama-$(LLAMA_VERSION)/* $(LLAMA_DIR)/bin/ 2>/dev/null || true; \
+		rm -rf $(LLAMA_DIR)/llama-$(LLAMA_VERSION); \
+	elif [ -d "$(LLAMA_DIR)/build/bin" ]; then \
 		echo "Moving files from nested build/bin/ structure..."; \
-		mv $(LLAMA_DIR)/build/bin/llama-* $(LLAMA_DIR)/bin/ 2>/dev/null || true; \
-		mv $(LLAMA_DIR)/build/bin/rpc-server $(LLAMA_DIR)/bin/ 2>/dev/null || true; \
 		mv $(LLAMA_DIR)/build/bin/*.so* $(LLAMA_DIR)/lib/ 2>/dev/null || true; \
 		mv $(LLAMA_DIR)/build/bin/*.dylib $(LLAMA_DIR)/lib/ 2>/dev/null || true; \
 		mv $(LLAMA_DIR)/build/bin/LICENSE* $(LLAMA_DIR)/ 2>/dev/null || true; \
+		mv $(LLAMA_DIR)/build/bin/* $(LLAMA_DIR)/bin/ 2>/dev/null || true; \
 		rm -rf $(LLAMA_DIR)/build; \
 	else \
-		for f in $(LLAMA_DIR)/llama-*; do case "$$f" in *.tar.gz) continue;; esac; mv "$$f" $(LLAMA_DIR)/bin/ 2>/dev/null || true; done; \
 		mv $(LLAMA_DIR)/*.so* $(LLAMA_DIR)/lib/ 2>/dev/null || true; \
 		mv $(LLAMA_DIR)/*.dylib $(LLAMA_DIR)/lib/ 2>/dev/null || true; \
+		for f in $(LLAMA_DIR)/llama-*; do case "$$f" in *.tar.gz) continue;; esac; mv "$$f" $(LLAMA_DIR)/bin/ 2>/dev/null || true; done; \
 	fi
 	-chmod +x $(LLAMA_DIR)/bin/* 2>/dev/null || true
 	@# Create symlinks for library compatibility
@@ -517,8 +525,8 @@ help:
 	@echo "Examples:"
 	@echo "  make all"
 	@echo "  make run-llamacppserver GRPC_PORT=50053"
-	@echo "  make run-llamacppserver HTTP_PORT=50053"
-	@echo "  make run-llamacppserver GRPC_PORT=50053 HTTP_PORT=8080"
+	@echo "  make run-llamacppserver HTTP_PORT=8083"
+	@echo "  make run-llamacppserver GRPC_PORT=50053 HTTP_PORT=8083"
 	@echo "  make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf"
 	@echo "  make run-paralleltest MODEL_PATH=/path/to/model.gguf PARALLEL_N=8"
 	@echo "  make LLAMA_VERSION=b6800 prepare"
@@ -526,12 +534,16 @@ help:
 	@echo "  make docker-integration-test-ci"
 	@echo "  make docker-build DOCKER_NO_CACHE=1"
 
+print-llama-version:
+	@echo $(LLAMA_VERSION)
+
 # =============================================================================
 # Docker Targets
 # =============================================================================
 
 # Default Docker image tag
 IMAGE_TAG ?= latest
+IMAGE_TAG_CI ?= ci
 
 # Docker build options (set DOCKER_NO_CACHE=1 to disable cache)
 ifdef DOCKER_NO_CACHE
@@ -583,4 +595,5 @@ docker-clean:
 	-docker compose -f docker/docker-compose.yml down -v --remove-orphans 2>/dev/null || true
 	-docker compose -f docker/docker-compose.ci.yml down -v --remove-orphans 2>/dev/null || true
 	-docker rmi llamacpp-server:$(IMAGE_TAG) llamacpp-client:$(IMAGE_TAG) 2>/dev/null || true
+	-docker rmi llamacpp-server:$(IMAGE_TAG_CI) llamacpp-client:$(IMAGE_TAG_CI) 2>/dev/null || true
 	@echo "Docker cleanup complete."

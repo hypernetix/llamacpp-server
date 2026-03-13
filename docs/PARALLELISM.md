@@ -332,8 +332,8 @@ Concurrency:
 
 Network:
   --host ADDR          Bind address (default: 127.0.0.1)
-  --grpc-port PORT          gRPC listen port (default: 50051)
-  --http-port PORT     HTTP+SSE listen port (disabled if empty)
+  --grpc-port PORT     gRPC listen port (default: 50052)
+  --http-port PORT     HTTP+SSE listen port (default: 8082)
 ```
 
 ## Further Reading

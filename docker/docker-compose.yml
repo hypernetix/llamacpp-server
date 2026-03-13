@@ -25,7 +25,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.server
       args:
-        LLAMA_VERSION: ${LLAMA_VERSION:-b8323}
+        LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
     image: llamacpp-server:${IMAGE_TAG:-latest}
     container_name: llamacpp-server
     ports:
@@ -51,7 +51,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.client
       args:
-        LLAMA_VERSION: ${LLAMA_VERSION:-b8323}
+        LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
     image: llamacpp-client:${IMAGE_TAG:-latest}
     container_name: llamacpp-client
     depends_on:
@@ -74,7 +74,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.server
       args:
-        LLAMA_VERSION: ${LLAMA_VERSION:-b8323}
+        LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
     image: llamacpp-server:${IMAGE_TAG:-latest}
     container_name: llamacpp-server-standalone
     profiles:

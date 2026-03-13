@@ -26,7 +26,7 @@ import (
 type flagOptions struct {
 	Host         string `long:"host" default:"127.0.0.1" description:"host address to bind (use 0.0.0.0 for Docker)"`
 	GRPCPort     string `long:"grpc-port" default:"50052" description:"port for gRPC server (disabled if empty)"`
-	HTTPPort     string `long:"http-port" default:"50051" description:"port for HTTP+SSE server (disabled if empty)"`
+	HTTPPort     string `long:"http-port" default:"8082" description:"port for HTTP+SSE server (disabled if empty)"`
 	NGpuLayers   int    `long:"ngpu" default:"99" description:"number of GPU layers"`
 	UseMmap      bool   `long:"mmap" description:"use mmap"`
 	SplitMode    string `long:"split-mode" default:"layer" description:"how to split model across GPUs: none, layer, row (row=tensor parallelism)"`

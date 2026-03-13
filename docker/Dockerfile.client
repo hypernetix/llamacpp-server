@@ -28,7 +28,7 @@ COPY . .
 
 # The client needs llama.cpp binaries because it shares code with bindings
 # Use Makefile to prepare them
-ARG LLAMA_VERSION=b8323
+ARG LLAMA_VERSION
 ENV LLAMA_VERSION=${LLAMA_VERSION}
 RUN make prepare LLAMA_VERSION=${LLAMA_VERSION}
 

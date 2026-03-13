@@ -125,9 +125,9 @@ make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf # run the llamacpp se
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LLAMA_VERSION` | `b8323` | llama.cpp release version to download |
+| `LLAMA_VERSION` | *(see Makefile)* | llama.cpp release version to download |
 | `GRPC_PORT` | `50052` | gRPC server port |
-| `HTTP_PORT` | `50051` | HTTP+SSE server port |
+| `HTTP_PORT` | `8082` | HTTP+SSE server port |
 | `MODEL_PATH` | (none) | Path to GGUF model file (required for tests) |
 | `ATTACH_GRPC_PORT` | (none) | Port of already running gRPC server, for llamacppclienttest |
 | `ATTACH_HTTP_PORT` | (none) | Port of already running HTTP+SSE server, for llamacppclienttest |
