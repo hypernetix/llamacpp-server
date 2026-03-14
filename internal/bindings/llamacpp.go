@@ -471,28 +471,17 @@ func (c *Context) NCells() int {
 	return int(C.llama_n_ctx(c.impl))
 }
 
-// NCellsUsed returns an estimate of the number of used cells in the KV cache.
-// Note: In llama.cpp b6770+, the old llama_kv_self_used_cells() function was removed.
-// This implementation uses the new memory API to estimate usage based on sequence 0.
-// For a more accurate count across all sequences, use the memory API directly.
+// NCellsUsed returns an estimate of the number of used cells in the KV cache
+// for sequence 0. For multi-sequence contexts, use Memory().SeqPosMax() directly.
 func (c *Context) NCellsUsed() int {
-	// Get the memory handle
-	mem := C.llama_get_memory(c.impl)
+	mem := c.Memory()
 	if mem == nil {
 		return 0
 	}
-
-	// Get the max position for sequence 0 (the primary sequence)
-	// This gives us an approximation of used cells for single-sequence inference
-	maxPos := int(C.llama_memory_seq_pos_max(mem, 0))
-
-	// If sequence is empty, max_pos will be -1
+	maxPos := mem.SeqPosMax(0)
 	if maxPos < 0 {
 		return 0
 	}
-
-	// The number of used cells is approximately max_pos + 1
-	// (positions are 0-indexed, so position 5 means 6 cells used: 0,1,2,3,4,5)
 	return maxPos + 1
 }
 
@@ -697,18 +686,41 @@ func (s *SamplerChain) Free() {
 	C.llama_sampler_free(s.impl)
 }
 
+// =============================================================================
+// Batch
+// =============================================================================
+
 type Batch struct {
-	owned bool
-	impl  C.struct_llama_batch
+	owned   bool
+	cap     int
+	nSeqMax int
+	impl    C.struct_llama_batch
 }
 
+// NotOwnedOneItemBatch creates a simple single-sequence batch using llama_batch_get_one.
+// The batch is not owned and will not be freed — suitable for the current
+// separate-context predict loop.
 func NotOwnedOneItemBatch(tokens []int) *Batch {
 	cTokens := make([]C.llama_token, len(tokens))
 	for i := range tokens {
 		cTokens[i] = C.llama_token(tokens[i])
 	}
 	impl := C.llama_batch_get_one(&cTokens[0], C.int32_t(len(tokens)))
-	return &Batch{owned: false, impl: impl} // will not be freed
+	return &Batch{owned: false, impl: impl}
+}
+
+// BatchInit allocates an owned batch that can hold up to nTokens tokens,
+// each assignable to up to nSeqMax sequences. This is required for
+// continuous batching where multiple sequences share a single decode call.
+// The batch must be freed with Free().
+func BatchInit(nTokens, embd, nSeqMax int) *Batch {
+	impl := C.llama_batch_init(C.int32_t(nTokens), C.int32_t(embd), C.int32_t(nSeqMax))
+	return &Batch{
+		owned:   true,
+		cap:     nTokens,
+		nSeqMax: nSeqMax,
+		impl:    impl,
+	}
 }
 
 func (b *Batch) Free() {
@@ -719,4 +731,155 @@ func (b *Batch) Free() {
 
 func (b *Batch) NTokens() int {
 	return int(b.impl.n_tokens)
+}
+
+func (b *Batch) Cap() int {
+	return b.cap
+}
+
+// Clear resets the batch to empty (n_tokens = 0) without freeing memory.
+func (b *Batch) Clear() {
+	b.impl.n_tokens = 0
+}
+
+// Add appends a token to the batch with its position, sequence ID, and
+// whether logits should be output for this token. Panics if the batch is full.
+func (b *Batch) Add(token, pos, seqId int, logits bool) {
+	i := int(b.impl.n_tokens)
+	if i >= b.cap {
+		panic(fmt.Sprintf("batch overflow: %d >= capacity %d", i, b.cap))
+	}
+
+	tokens := unsafe.Slice(b.impl.token, b.cap)
+	tokens[i] = C.llama_token(token)
+
+	positions := unsafe.Slice(b.impl.pos, b.cap)
+	positions[i] = C.llama_pos(pos)
+
+	nSeqIds := unsafe.Slice(b.impl.n_seq_id, b.cap)
+	nSeqIds[i] = 1
+
+	seqIdPtrs := unsafe.Slice(b.impl.seq_id, b.cap)
+	innerSeqIds := unsafe.Slice(seqIdPtrs[i], b.nSeqMax)
+	innerSeqIds[0] = C.llama_seq_id(seqId)
+
+	logitsArr := unsafe.Slice(b.impl.logits, b.cap)
+	if logits {
+		logitsArr[i] = 1
+	} else {
+		logitsArr[i] = 0
+	}
+
+	b.impl.n_tokens = C.int32_t(i + 1)
+}
+
+// SetToken sets the token ID at position i in the batch.
+func (b *Batch) SetToken(i, token int) {
+	unsafe.Slice(b.impl.token, b.cap)[i] = C.llama_token(token)
+}
+
+// SetPos sets the sequence position at position i in the batch.
+func (b *Batch) SetPos(i, pos int) {
+	unsafe.Slice(b.impl.pos, b.cap)[i] = C.llama_pos(pos)
+}
+
+// SetSeqId sets the sequence ID at position i (single sequence assignment).
+func (b *Batch) SetSeqId(i, seqId int) {
+	unsafe.Slice(b.impl.n_seq_id, b.cap)[i] = 1
+	seqIdPtrs := unsafe.Slice(b.impl.seq_id, b.cap)
+	unsafe.Slice(seqIdPtrs[i], b.nSeqMax)[0] = C.llama_seq_id(seqId)
+}
+
+// SetLogits sets whether logits should be output for position i.
+func (b *Batch) SetLogits(i int, logits bool) {
+	if logits {
+		unsafe.Slice(b.impl.logits, b.cap)[i] = 1
+	} else {
+		unsafe.Slice(b.impl.logits, b.cap)[i] = 0
+	}
+}
+
+// SetNTokens sets the number of active tokens in the batch.
+func (b *Batch) SetNTokens(n int) {
+	b.impl.n_tokens = C.int32_t(n)
+}
+
+// =============================================================================
+// Memory (KV Cache Sequence Management)
+// =============================================================================
+
+// Memory wraps llama_memory_t for KV cache sequence management.
+type Memory struct {
+	impl C.llama_memory_t
+}
+
+// Memory returns the memory handle for the context's KV cache.
+// Returns nil if the context has no memory.
+func (c *Context) Memory() *Memory {
+	mem := C.llama_get_memory(c.impl)
+	if mem == nil {
+		return nil
+	}
+	return &Memory{impl: mem}
+}
+
+// Clear clears all memory contents. If data is true, the data buffers
+// are also cleared together with the metadata.
+func (m *Memory) Clear(data bool) {
+	C.llama_memory_clear(m.impl, C.bool(data))
+}
+
+// SeqRm removes all tokens that belong to the specified sequence and have
+// positions in [p0, p1). Returns false if a partial sequence cannot be removed.
+// Removing a whole sequence (p0 < 0, p1 < 0) never fails.
+// seqId < 0: match any sequence. p0 < 0: [0, p1]. p1 < 0: [p0, inf).
+func (m *Memory) SeqRm(seqId, p0, p1 int) bool {
+	return bool(C.llama_memory_seq_rm(
+		m.impl,
+		C.llama_seq_id(seqId),
+		C.llama_pos(p0),
+		C.llama_pos(p1),
+	))
+}
+
+// SeqCp copies all tokens that belong to seqIdSrc to seqIdDst
+// for positions in [p0, p1).
+// p0 < 0: [0, p1]. p1 < 0: [p0, inf).
+func (m *Memory) SeqCp(seqIdSrc, seqIdDst, p0, p1 int) {
+	C.llama_memory_seq_cp(
+		m.impl,
+		C.llama_seq_id(seqIdSrc),
+		C.llama_seq_id(seqIdDst),
+		C.llama_pos(p0),
+		C.llama_pos(p1),
+	)
+}
+
+// SeqKeep removes all tokens that do not belong to the specified sequence.
+func (m *Memory) SeqKeep(seqId int) {
+	C.llama_memory_seq_keep(m.impl, C.llama_seq_id(seqId))
+}
+
+// SeqAdd adds relative position delta to all tokens that belong to the
+// specified sequence and have positions in [p0, p1).
+func (m *Memory) SeqAdd(seqId, p0, p1, delta int) {
+	C.llama_memory_seq_add(
+		m.impl,
+		C.llama_seq_id(seqId),
+		C.llama_pos(p0),
+		C.llama_pos(p1),
+		C.llama_pos(delta),
+	)
+}
+
+// SeqPosMin returns the smallest position present in memory for the
+// specified sequence. Returns -1 if the sequence is empty.
+func (m *Memory) SeqPosMin(seqId int) int {
+	return int(C.llama_memory_seq_pos_min(m.impl, C.llama_seq_id(seqId)))
+}
+
+// SeqPosMax returns the largest position present in memory for the
+// specified sequence. Returns -1 if the sequence is empty.
+func (m *Memory) SeqPosMax(seqId int) int {
+	return int(C.llama_memory_seq_pos_max(m.impl, C.llama_seq_id(seqId)))
 }

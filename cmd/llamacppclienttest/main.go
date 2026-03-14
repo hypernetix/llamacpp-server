@@ -28,8 +28,9 @@ type flagOptions struct {
 	MinP           float64 `long:"min-p" description:"min-p sampling" default:"0.05"`
 	RandomSeed     int     `long:"seed" description:"random seed for reproducible results (-1 for random)" default:"-1"`
 	MaxTokens      int     `long:"max-tokens" description:"maximum tokens to generate" default:"100"`
-	TestMode       string  `long:"test-mode" description:"test mode: baseline, greedy, seeded, stress, or parallel" default:"baseline"`
-	ParallelN      int     `long:"parallel-n" description:"number of concurrent requests for parallel test mode" default:"4"`
+	TestMode           string `long:"test-mode" description:"test mode: baseline, greedy, seeded, stress, or parallel" default:"baseline"`
+	ParallelN          int    `long:"parallel-n" description:"number of concurrent requests for parallel test mode" default:"4"`
+	ContinuousBatching bool   `long:"continuous-batching" description:"tell the spawned server to use continuous batching mode"`
 }
 
 // Helper functions for pointer creation
@@ -80,10 +81,12 @@ func main() {
 	logger.Infof("Starting LLM service...")
 
 	llmServiceOptions := llmservice.LLMServiceOptions{
-		ServerPath: opts.ServerPath,
-		AttachHost: opts.AttachHost,
-		AttachPort: opts.AttachPort,
-		Transport:  opts.Transport,
+		ServerPath:         opts.ServerPath,
+		AttachHost:         opts.AttachHost,
+		AttachPort:         opts.AttachPort,
+		Transport:          opts.Transport,
+		ContinuousBatching: opts.ContinuousBatching,
+		NParallel:          opts.ParallelN,
 	}
 
 	llmService, err := llmservice.NewLlamacppLLMService(llmServiceOptions, logger)

@@ -3,6 +3,7 @@ package llmservice
 import (
 	"fmt"
 
+	"github.com/hypernetix/llamacpp_server/internal/engine"
 	"github.com/hypernetix/llamacpp_server/internal/inference"
 	"github.com/hypernetix/llamacpp_server/internal/logging"
 	"github.com/hypernetix/llamacpp_server/internal/modelmanagement"
@@ -22,8 +23,27 @@ type Service struct {
 func NewService(opts Options, logger logging.SprintfLogger) *Service {
 	loadModelFunc := newLoadModelFunc(opts.Model, logger)
 	modelMgr := modelmanagement.NewModelManager(loadModelFunc, logger)
-	predictFunc := newPredictFunc(opts.Predict, logger)
-	predictionsMgr := inference.NewPredictionsManager(predictFunc, opts.Predict.NParallel)
+
+	var predictionsMgr inference.PredictionsManager
+	if opts.Predict.ContinuousBatching {
+		nParallel := opts.Predict.NParallel
+		if nParallel <= 0 {
+			nParallel = 1
+		}
+		predictionsMgr = engine.New(engine.Options{
+			NParallel:     nParallel,
+			CtxSize:       opts.Predict.CtxSize,
+			BatchSize:     opts.Predict.BatchSize,
+			NThreads:      opts.Predict.NThreads,
+			NThreadsBatch: opts.Predict.NThreadsBatch,
+			FlashAttn:     opts.Predict.FlashAttn,
+		}, logger)
+		logger.Infof("continuous batching enabled (slots=%d)", nParallel)
+	} else {
+		predictFunc := newPredictFunc(opts.Predict, logger)
+		predictionsMgr = inference.NewPredictionsManager(predictFunc, opts.Predict.NParallel)
+	}
+
 	return &Service{
 		modelManager:       modelMgr,
 		predictionsManager: predictionsMgr,

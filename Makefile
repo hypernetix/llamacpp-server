@@ -13,6 +13,7 @@
 #   make run-llamacppserver  - Run the llamacpp server
 #   make run-llamacppclienttest  - Run the llamacpp client test
 #   make run-paralleltest    - Run the parallel inference test
+#   make run-batchtest       - Run the continuous batching test
 #   make run-inferencetest1  - Run inference test 1
 #   make run-inferencetest2  - Run inference test 2
 
@@ -129,7 +130,7 @@ endif
 .PHONY: all prepare build clean help check-deps print-llama-version
 .PHONY: download-binaries import-libs
 .PHONY: build-llamacppserver build-llamacppclienttest build-inferencetest1 build-inferencetest2
-.PHONY: run-llamacppserver run-llamacppclienttest run-paralleltest run-inferencetest1 run-inferencetest2
+.PHONY: run-llamacppserver run-llamacppclienttest run-paralleltest run-batchtest run-inferencetest1 run-inferencetest2
 .PHONY: copy-dlls-llamacppserver copy-dlls-llamacppclienttest copy-dlls-inferencetest1 copy-dlls-inferencetest2
 .PHONY: docker-build docker-build-server docker-build-client
 .PHONY: docker-integration-test docker-integration-test-ci docker-clean
@@ -422,6 +423,17 @@ endif
 	@echo "=== Running parallel inference test ($(PARALLEL_N) concurrent requests) ==="
 	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/llamacppclienttest/llamacppclienttest$(EXE) --port $(ATTACH_PORT) --transport $(TRANSPORT) --server "$(SERVER_PATH)" --model "$(MODEL_PATH)" --test-mode parallel --parallel-n $(PARALLEL_N)
 
+run-batchtest: build-llamacppclienttest copy-dlls-llamacppclienttest copy-dlls-llamacppserver
+ifeq ($(MODEL_PATH),)
+	@echo "Error: MODEL_PATH is required"
+	@echo "Usage: make run-batchtest MODEL_PATH=/path/to/model.gguf"
+	@echo "       make run-batchtest MODEL_PATH=/path/to/model.gguf PARALLEL_N=4"
+	@exit 1
+endif
+	@echo ""
+	@echo "=== Running continuous batching test ($(PARALLEL_N) slots, parallel requests) ==="
+	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/llamacppclienttest/llamacppclienttest$(EXE) --port $(ATTACH_PORT) --transport $(TRANSPORT) --server "$(SERVER_PATH)" --model "$(MODEL_PATH)" --test-mode parallel --parallel-n $(PARALLEL_N) --continuous-batching
+
 run-inferencetest1: build-inferencetest1 copy-dlls-inferencetest1
 ifeq ($(MODEL_PATH),)
 	@echo "Error: MODEL_PATH is required"
@@ -495,6 +507,7 @@ help:
 	@echo "  make run-llamacppserver                      - Run llamacpp server"
 	@echo "  make run-llamacppclienttest MODEL_PATH=<path>    - Run llamacpp client test"
 	@echo "  make run-paralleltest MODEL_PATH=<path>      - Run parallel inference test"
+	@echo "  make run-batchtest MODEL_PATH=<path>         - Run continuous batching test"
 	@echo "  make run-inferencetest1 MODEL_PATH=<path>    - Run inference test 1"
 	@echo "  make run-inferencetest2 MODEL_PATH=<path>    - Run inference test 2"
 	@echo ""
@@ -529,6 +542,7 @@ help:
 	@echo "  make run-llamacppserver GRPC_PORT=50053 HTTP_PORT=8083"
 	@echo "  make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf"
 	@echo "  make run-paralleltest MODEL_PATH=/path/to/model.gguf PARALLEL_N=8"
+	@echo "  make run-batchtest MODEL_PATH=/path/to/model.gguf PARALLEL_N=4"
 	@echo "  make LLAMA_VERSION=b6800 prepare"
 	@echo "  make docker-integration-test MODEL_PATH=/path/to/model.gguf"
 	@echo "  make docker-integration-test-ci"

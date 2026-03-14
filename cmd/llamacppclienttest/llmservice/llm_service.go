@@ -38,10 +38,12 @@ type LLMService interface {
 }
 
 type LLMServiceOptions struct {
-	ServerPath string
-	AttachHost string
-	AttachPort int
-	Transport  string // "grpc" or "http"
+	ServerPath         string
+	AttachHost         string
+	AttachPort         int
+	Transport          string // "grpc" or "http"
+	ContinuousBatching bool
+	NParallel          int
 }
 
 func NewLlamacppLLMService(options LLMServiceOptions, logger logging.SprintfLogger) (LLMService, error) {
@@ -84,7 +86,15 @@ func NewLlamacppLLMService(options LLMServiceOptions, logger logging.SprintfLogg
 	}
 
 	args := []string{portFlag, fmt.Sprintf("%d", port)}
-	logger.Infof("Spawning server with %s transport on port %d", transport, port)
+	if options.ContinuousBatching {
+		args = append(args, "--continuous-batching")
+		nPar := options.NParallel
+		if nPar <= 0 {
+			nPar = 4
+		}
+		args = append(args, "--n-parallel", fmt.Sprintf("%d", nPar))
+	}
+	logger.Infof("Spawning server with %s transport on port %d (continuousBatching=%v)", transport, port, options.ContinuousBatching)
 
 	serverProcess, err := NewProcess(initialLogger, options.ServerPath, args)
 	if err != nil {

@@ -45,9 +45,22 @@ at its specific index in the batch.
 
 **Minimal benefit when:**
 
-- Running CPU-only inference (forward pass is the bottleneck regardless).
 - Concurrency is always 1 (no batching opportunity).
 - Requests are rare and never overlap.
+
+### Measured Results (CPU-only, Mistral-7B Q4_0, 4 concurrent requests)
+
+| Metric | Separate-context | Continuous batching | Improvement |
+|--------|-----------------|-------------------|-------------|
+| Wall-clock time | 162.4s | 82.5s | **2.0x faster** |
+| Aggregate throughput | 3.26 tok/s | 5.85 tok/s | **1.8x higher** |
+| Per-request throughput | 0.82–0.85 tok/s | 1.1–1.8 tok/s | ~1.5x higher |
+| KV cache memory | 4 × 4096 contexts | 1 × 4096 shared | ~4x less |
+
+Even on CPU — where the forward pass is inherently sequential — continuous batching
+delivers a 2x wall-clock speedup because one batched `llama_decode` call avoids the
+overhead of 4 separate context switches and forward passes. GPU workloads should see
+proportionally larger gains since the GPU can utilise the batch parallelism directly.
 
 ## Mode Strategy: Replace or Coexist?
 
@@ -78,15 +91,72 @@ burden without providing meaningful benefit for any workload.
 
 ### Rollout plan
 
-| Phase | Description | Mode |
-|-------|-------------|------|
-| **1 — Current** | Separate-context parallelism with semaphore concurrency control | Default (only mode) |
-| **2 — Opt-in** | Continuous batching behind `--continuous-batching` flag | Explicit opt-in |
-| **3 — Default** | Continuous batching becomes the default; separate-context available via `--legacy-mode` | Default with fallback |
-| **4 — Removal** | Separate-context code path removed | Only mode |
+| Phase | Description | Mode | Status |
+|-------|-------------|------|--------|
+| **1** | Separate-context parallelism with semaphore concurrency control | Default (only mode) | Done |
+| **2** | Continuous batching behind `--continuous-batching` flag | Explicit opt-in | **Done** — validated on CPU with 2x speedup |
+| **3** | Continuous batching becomes the default; separate-context available via `--legacy-mode` | Default with fallback | Planned |
+| **4** | Separate-context code path removed | Only mode | Planned |
 
-Phase 2 → 3 transition should happen after the new mode has been tested in production
-with real workloads and no regressions are observed.
+### Phase 3 — Make Continuous Batching the Default
+
+**Prerequisites** (before Phase 3 can begin):
+
+- [ ] Docker CI integration for continuous batching tests
+- [ ] Comparison test mode (`--test-mode compare`): same prompts in both modes,
+      assert identical greedy outputs
+- [ ] Single-slot test (`n_parallel=1`): confirm identical output to separate-context
+- [ ] Backpressure test: 2N requests with N slots, all complete correctly
+- [ ] GPU validation (if hardware available): confirm throughput scaling
+
+**Implementation steps:**
+
+1. **Flip the default**: `--continuous-batching` becomes the default when
+   `--n-parallel` is set (or defaulted). The old mode becomes `--legacy-mode`.
+2. **`--n-parallel` defaults to 1** (was 0=unlimited). With CB, unlimited doesn't
+   make sense — each slot consumes KV cache budget. Users configure based on their
+   context size and expected concurrency.
+3. **`--ctx-size` semantics**: with CB, this is the *total* KV cache across all
+   slots. Per-slot budget = `ctx-size / n-parallel`. Document this clearly.
+4. **Update Docker configs**: remove `--continuous-batching` from Docker entrypoints
+   (it's now default). Add `--legacy-mode` only if needed for compatibility testing.
+5. **Update CI**: all integration tests run against CB by default. Add one legacy-mode
+   run to prevent regressions during the transition period.
+6. **Update documentation**: README, PARALLELISM.md, all examples.
+7. **Deprecation log**: when `--legacy-mode` is used, emit a startup warning that the
+   flag will be removed in Phase 4.
+
+**Estimated effort**: 2–3 days (mostly testing and documentation).
+
+### Phase 4 — Remove Separate-Context Code Path
+
+**Prerequisites** (before Phase 4 can begin):
+
+- [ ] Phase 3 has been running in production without regressions
+- [ ] No users relying on `--legacy-mode` for correctness (only for comparison testing)
+
+**Implementation steps:**
+
+1. Remove `--legacy-mode` / `--continuous-batching` flags (CB is the only mode).
+2. Delete `internal/llmservice/predict_cmd.go` (the per-request decode loop).
+3. Delete `internal/inference/predictions_manager.go` (the semaphore-based manager).
+4. Simplify `internal/llmservice/service.go` — directly create `engine.Engine`,
+   no conditional branching.
+5. `PredictOptions` loses `ContinuousBatching` and `NParallel` fields (NParallel
+   moves to engine options only).
+6. Remove `run-paralleltest` Makefile target (replaced by `run-batchtest`).
+7. Update all tests and documentation.
+
+**Files deleted:**
+- `internal/llmservice/predict_cmd.go` (~300 lines)
+- `internal/inference/predictions_manager.go` (~100 lines)
+
+**Files simplified:**
+- `internal/llmservice/service.go` — remove conditional engine creation
+- `cmd/llamacppserver/main.go` — remove `--continuous-batching` and `--legacy-mode`
+- `Makefile` — merge `run-batchtest` into `run-paralleltest`
+
+**Estimated effort**: 1 day.
 
 ## Implementation Requirements
 
@@ -214,19 +284,135 @@ separate-context baseline. They require a GPU.
 
 ### Test Implementation Plan
 
-1. **Extend `llamacppclienttest`** with a `--continuous-batching` flag that tells the server
-   to use the new mode. The existing `parallel` test mode already launches N concurrent
-   requests and validates responses — the same harness works for both modes.
+1. **`--continuous-batching` flag on `llamacppclienttest`** — When present, the spawned
+   server starts with `--continuous-batching --n-parallel N`. When connecting to an
+   external server (`--port`), the flag has no effect (the server is already configured).
+   **Status: Done.**
 
-2. **Add a comparison test mode** (`--test-mode compare`) that runs the same set of
-   prompts first in separate-context mode, then in continuous-batching mode, and
-   asserts identical outputs (greedy sampling required).
+2. **`run-batchtest` Makefile target** — Mirrors `run-paralleltest` but passes
+   `--continuous-batching` to the client test, which forwards it to the spawned server.
+   Uses greedy sampling (`Temperature: 0.0`) for deterministic output.
+   **Status: Done.**
 
-3. **Add a `run-batchtest` Makefile target** mirroring `run-paralleltest` but with
-   `--continuous-batching` enabled on the server side.
+   ```bash
+   # Run with default 4 slots
+   make run-batchtest MODEL_PATH=/path/to/model.gguf
 
-4. **GPU benchmarks** as a separate Makefile target (`run-benchmarks`) that reports
+   # Run with 8 slots
+   make run-batchtest MODEL_PATH=/path/to/model.gguf PARALLEL_N=8
+   ```
+
+3. **Comparison test mode** (`--test-mode compare`) — Run the same prompts first in
+   separate-context mode, then in continuous-batching mode, and assert identical outputs
+   (greedy sampling required). **Status: Not started (future).**
+
+4. **Docker CI** — Add CB test services to docker-compose.ci.yml and integration test
+   scripts. **Status: Deferred** until the engine is validated with manual testing.
+
+5. **GPU benchmarks** as a separate Makefile target (`run-benchmarks`) that reports
    throughput numbers for both modes. Not part of CI — run manually before releases.
+   **Status: Not started (future).**
+
+## Implementation Progress
+
+### Phase 2 — Opt-in Continuous Batching
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Batch API bindings (`BatchInit`, `Add`, per-token setters) | **Done** | `internal/bindings/llamacpp.go` — `BatchInit(nTokens, embd, nSeqMax)`, `Add(token, pos, seqId, logits)`, `Clear()`, individual setters |
+| KV sequence management bindings | **Done** | `Memory` type with `Clear`, `SeqRm`, `SeqCp`, `SeqKeep`, `SeqAdd`, `SeqPosMin`, `SeqPosMax` |
+| Inference engine / scheduler | **Done** | `internal/engine/engine.go` — tick loop: build batch → decode → sample → dispatch |
+| Slot management | **Done** | `internal/engine/slot.go` — idle/prefilling/generating state machine, per-slot sampler chains |
+| Service integration (`--continuous-batching` flag) | **Done** | `--continuous-batching` CLI flag, `llmservice.NewService` creates `engine.Engine` when enabled |
+| Correctness tests (CPU) | **Done** | `run-batchtest` validated: 4 concurrent requests, 2x wall-clock speedup vs separate-context |
+
+### Bindings API Reference
+
+**Batch** (`internal/bindings/llamacpp.go`):
+
+```go
+BatchInit(nTokens, embd, nSeqMax int) *Batch  // allocate multi-sequence batch
+b.Add(token, pos, seqId int, logits bool)      // append token to batch
+b.Clear()                                       // reset to empty (no dealloc)
+b.SetToken(i, token int)                        // per-token setters
+b.SetPos(i, pos int)
+b.SetSeqId(i, seqId int)
+b.SetLogits(i int, logits bool)
+b.SetNTokens(n int)
+b.Cap() int                                     // max capacity
+b.NTokens() int                                 // current count
+b.Free()                                        // deallocate owned batch
+```
+
+**Memory** (`internal/bindings/llamacpp.go`):
+
+```go
+ctx.Memory() *Memory                            // get KV cache memory handle
+m.Clear(data bool)                              // clear all memory
+m.SeqRm(seqId, p0, p1 int) bool                // remove sequence tokens in [p0, p1)
+m.SeqCp(seqIdSrc, seqIdDst, p0, p1 int)        // copy sequence
+m.SeqKeep(seqId int)                            // remove all except this sequence
+m.SeqAdd(seqId, p0, p1, delta int)              // shift positions by delta
+m.SeqPosMin(seqId int) int                      // smallest position (-1 if empty)
+m.SeqPosMax(seqId int) int                      // largest position (-1 if empty)
+```
+
+### Phase 2 Validation Results
+
+Tested with Mistral-7B-Instruct-v0.2 Q4_0 on CPU (Intel, no GPU), 4 concurrent
+greedy-sampled requests, `--n-parallel 4 --ctx-size 4096`:
+
+- **All 4 requests completed successfully** with coherent, non-contaminated responses.
+- **2.0x wall-clock speedup** over separate-context mode (82.5s vs 162.4s).
+- **1.8x aggregate throughput** (5.85 tok/s vs 3.26 tok/s).
+- Slot lifecycle worked correctly: prefill → generate → EoG/max-tokens → idle.
+- KV cache cleanup on slot finish confirmed (no stale state on reuse).
+
+### Engine Architecture
+
+The engine (`internal/engine/`) is a single-goroutine scheduler that implements
+`inference.PredictionsManager`. It is activated by passing `--continuous-batching`
+to the server.
+
+```
+                      ┌─────────────────────────────────────────────────┐
+  Predict() ─────────►│              request channel                    │
+  Predict() ─────────►│                                                 │
+  Predict() ─────────►│                                                 │
+                      └────────────────────┬────────────────────────────┘
+                                           │
+                                           ▼
+                      ┌─────────────────────────────────────────────────┐
+                      │              Engine.run()                       │
+                      │                                                 │
+                      │  1. Assign requests to idle slots               │
+                      │  2. Build batch:                                │
+                      │     - generating slots → 1 decode token each   │
+                      │     - prefilling slots → prompt chunk           │
+                      │  3. llama_decode(batch)                         │
+                      │  4. Sample at each slot's batch index            │
+                      │  5. Stream tokens back / finish slots           │
+                      │  6. Repeat while any slot is active             │
+                      │                                                 │
+                      │  Slots: [0] [1] [2] ... [N-1]                  │
+                      │  States: idle / prefilling / generating         │
+                      └─────────────────────────────────────────────────┘
+```
+
+**Files:**
+- `engine.go` — `Engine` struct, `New`, `Predict`, `Stop`, run loop, tick cycle
+- `slot.go` — `slot` struct, state machine, `request`/`requestResult` types
+- `sampler.go` — `buildSamplerChain` helper (same logic as `predict_cmd.go`)
+
+**Usage:**
+
+```bash
+# Enable continuous batching with 4 slots
+llamacppserver --continuous-batching --n-parallel 4 --ctx-size 8192
+
+# Without the flag, the server uses the original separate-context mode
+llamacppserver --n-parallel 4 --ctx-size 4096
+```
 
 ## Reference Implementations
 

@@ -36,8 +36,9 @@ type flagOptions struct {
 	NParallel    int    `long:"n-parallel" default:"0" description:"max concurrent inference requests (0=unlimited)"`
 	Threads      int    `long:"threads" default:"0" description:"number of threads for generation (0=auto-detect)"`
 	ThreadsBatch int    `long:"threads-batch" default:"0" description:"number of threads for batch/prompt processing (0=auto-detect)"`
-	CtxSize      int    `long:"ctx-size" default:"4096" description:"context window size per inference slot"`
-	BatchSize    int    `long:"batch-size" default:"2048" description:"batch size for prompt processing"`
+	CtxSize            int  `long:"ctx-size" default:"4096" description:"context window size per inference slot"`
+	BatchSize          int  `long:"batch-size" default:"2048" description:"batch size for prompt processing"`
+	ContinuousBatching bool `long:"continuous-batching" description:"enable continuous batching (shared context, multi-slot scheduler)"`
 }
 
 func main() {
@@ -99,12 +100,13 @@ func main() {
 			TensorSplit: tensorSplit,
 		},
 		Predict: llmservice.PredictOptions{
-			FlashAttn:     opts.FlashAttn,
-			NParallel:     opts.NParallel,
-			NThreads:      opts.Threads,
-			NThreadsBatch: opts.ThreadsBatch,
-			CtxSize:       opts.CtxSize,
-			BatchSize:     opts.BatchSize,
+			FlashAttn:          opts.FlashAttn,
+			NParallel:          opts.NParallel,
+			NThreads:           opts.Threads,
+			NThreadsBatch:      opts.ThreadsBatch,
+			CtxSize:            opts.CtxSize,
+			BatchSize:          opts.BatchSize,
+			ContinuousBatching: opts.ContinuousBatching,
 		},
 	}
 
@@ -119,6 +121,9 @@ func main() {
 	}
 	if opts.FlashAttn {
 		logger.Infof("Flash attention: enabled")
+	}
+	if opts.ContinuousBatching {
+		logger.Infof("Continuous batching: enabled")
 	}
 
 	service := llmservice.NewService(serviceOpts, logger)

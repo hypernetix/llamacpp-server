@@ -10,12 +10,13 @@ import (
 )
 
 type PredictOptions struct {
-	FlashAttn     bool
-	NParallel     int
-	NThreads      int
-	NThreadsBatch int
-	CtxSize       int
-	BatchSize     int
+	FlashAttn          bool
+	NParallel          int
+	NThreads           int
+	NThreadsBatch      int
+	CtxSize            int
+	BatchSize          int
+	ContinuousBatching bool
 }
 
 func newPredictFunc(options PredictOptions, logger logging.SprintfLogger) inference.PredictFunc {
