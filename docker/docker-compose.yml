@@ -1,25 +1,26 @@
-# Docker Compose for llamacpp gRPC integration tests
+# Docker Compose for llamacpp integration tests
 #
 # Usage:
-#   # With local model file:
-#   MODEL_PATH=/path/to/model.gguf docker compose -f docker/docker-compose.yml up --build
-#
-#   # Or use the integration test script:
+#   # With local model file (uses integration test script for sequential gRPC + HTTP tests):
 #   ./scripts/integration-test.sh --model /path/to/model.gguf
+#
+#   # Or via make:
+#   make docker-integration-test MODEL_PATH=/path/to/model.gguf
 #
 # Environment variables:
 #   MODEL_PATH      - Path to the GGUF model file on HOST (required)
 #   GRPC_PORT       - gRPC server port (default: 50051)
+#   HTTP_PORT       - HTTP+SSE server port (default: 8080)
 #   TEST_MODE       - Test mode: baseline, greedy, seeded, stress (default: greedy)
 #
 # Note: The model is mounted to /models/model.gguf inside the server container.
-#       The client tells the server to load from this container path via gRPC.
+#       The client tells the server to load from this container path.
 
 # Container path where model is mounted (used consistently below)
 x-model-container-path: &model-container-path /models/model.gguf
 
 services:
-  # gRPC Server - loads and serves the LLM model
+  # Server - loads and serves the LLM model via both gRPC and HTTP
   server:
     build:
       context: ..
@@ -30,14 +31,14 @@ services:
     container_name: llamacpp-server
     ports:
       - "${GRPC_PORT:-50051}:50051"
+      - "${HTTP_PORT:-8080}:8080"
     volumes:
       # Mount host's MODEL_PATH to fixed container path
       - ${MODEL_PATH:?MODEL_PATH is required}:/models/model.gguf:ro
     environment:
       - LD_LIBRARY_PATH=/app
-    command: ["--grpc-port", "50051"]
+    command: ["--grpc-port", "50051", "--http-port", "8080"]
     healthcheck:
-      # Simple TCP health check (gRPC port is open)
       test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/50051' || exit 1"]
       interval: 5s
       timeout: 3s
@@ -45,23 +46,44 @@ services:
       start_period: 10s
     restart: "no"
 
-  # gRPC Client Test - connects to server and runs tests
-  client:
+  # gRPC Client Test - connects to server via gRPC
+  client-grpc:
     build:
       context: ..
       dockerfile: docker/Dockerfile.client
       args:
         LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
     image: llamacpp-client:${IMAGE_TAG:-latest}
-    container_name: llamacpp-client
+    container_name: llamacpp-client-grpc
     depends_on:
       server:
         condition: service_healthy
-    # Connect to server and run test
-    # Note: --model path is the path INSIDE THE SERVER container (via gRPC LoadModel)
     command: >
       --host server
-      --grpc-port 50051
+      --port 50051
+      --transport grpc
+      --model /models/model.gguf
+      --test-mode ${TEST_MODE:-greedy}
+      --temperature 0
+      --max-tokens 50
+    restart: "no"
+
+  # HTTP Client Test - connects to server via HTTP+SSE
+  client-http:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.client
+      args:
+        LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
+    image: llamacpp-client:${IMAGE_TAG:-latest}
+    container_name: llamacpp-client-http
+    depends_on:
+      server:
+        condition: service_healthy
+    command: >
+      --host server
+      --port 8080
+      --transport http
       --model /models/model.gguf
       --test-mode ${TEST_MODE:-greedy}
       --temperature 0
@@ -81,9 +103,10 @@ services:
       - standalone
     ports:
       - "${GRPC_PORT:-50051}:50051"
+      - "${HTTP_PORT:-8080}:8080"
     volumes:
       - ${MODEL_PATH:?MODEL_PATH is required}:/models/model.gguf:ro
     environment:
       - LD_LIBRARY_PATH=/app
-    command: ["--grpc-port", "50051"]
+    command: ["--grpc-port", "50051", "--http-port", "8080"]
     restart: unless-stopped

@@ -106,8 +106,10 @@ make run-llamacppserver GRPC_PORT=50053
 # Run tests (MODEL_PATH required)
 make run-inferencetest1 MODEL_PATH=/path/to/model.gguf
 make run-inferencetest2 MODEL_PATH=/path/to/model.gguf
-make run-llamacppclienttest SERVER_PATH='' ATTACH_GRPC_PORT=50053 MODEL_PATH=/path/to/model.gguf # send request to an already running llamacpp server
-make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf # run the llamacpp server at dynamic port, then send request to it
+make run-llamacppclienttest SERVER_PATH='' ATTACH_PORT=50053 MODEL_PATH=/path/to/model.gguf  # attach to running gRPC server
+make run-llamacppclienttest SERVER_PATH='' ATTACH_PORT=8080 TRANSPORT=http MODEL_PATH=/path/to/model.gguf  # attach to running HTTP server
+make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf  # spawn server, test via gRPC (default)
+make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf TRANSPORT=http  # spawn server, test via HTTP
 ```
 
 ### Docker Targets
@@ -129,9 +131,9 @@ make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf # run the llamacpp se
 | `GRPC_PORT` | `50052` | gRPC server port |
 | `HTTP_PORT` | `8082` | HTTP+SSE server port |
 | `MODEL_PATH` | (none) | Path to GGUF model file (required for tests) |
-| `ATTACH_GRPC_PORT` | (none) | Port of already running gRPC server, for llamacppclienttest |
-| `ATTACH_HTTP_PORT` | (none) | Port of already running HTTP+SSE server, for llamacppclienttest |
-| `SERVER_PATH` | (auto) | Path of gRPC server executable to run, for llamacppclienttest |
+| `ATTACH_PORT` | `0` | Port of already running server (0 = spawn server), for llamacppclienttest |
+| `TRANSPORT` | `grpc` | Transport protocol: `grpc` or `http`, for llamacppclienttest |
+| `SERVER_PATH` | (auto) | Path of server executable to run, for llamacppclienttest |
 | `IMAGE_TAG` | `latest` | Docker image tag |
 
 ### Using Different llama.cpp Versions
@@ -212,8 +214,11 @@ make run-llamacppserver GRPC_PORT=50052
 ### gRPC Client Test
 
 ```bash
-# Run client test against running server
-./cmd/llamacppclienttest/llamacppclienttest --host 127.0.0.1 --grpc-port 50052 --model /path/to/model.gguf
+# Run client test against running gRPC server
+./cmd/llamacppclienttest/llamacppclienttest --host 127.0.0.1 --port 50052 --transport grpc --model /path/to/model.gguf
+
+# Run client test against running HTTP server
+./cmd/llamacppclienttest/llamacppclienttest --host 127.0.0.1 --port 8082 --transport http --model /path/to/model.gguf
 
 # Or via make
 make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf
@@ -224,7 +229,8 @@ make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--host` | `127.0.0.1` | Server host address to connect to |
-| `--grpc-port` | (none) | Server port to connect to |
+| `--port` | `0` | Server port to connect to (0 = spawn server) |
+| `--transport` | `grpc` | Transport protocol: `grpc` or `http` |
 | `--server` | (none) | Path to server executable (starts server automatically) |
 | `--model` | (none) | Path to GGUF model file (required) |
 | `--temperature` | `0.7` | Sampling temperature |

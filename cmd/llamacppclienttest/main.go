@@ -16,11 +16,11 @@ import (
 )
 
 type flagOptions struct {
-	ModelPath      string  `long:"model" description:"path to the model file"`
-	ServerPath     string  `long:"server" description:"path to the server executable"`
-	AttachHost     string  `long:"host" description:"host address to attach to (default: 127.0.0.1)" default:"127.0.0.1"`
-	AttachGRPCPort int     `long:"grpc-port" description:"gRPC port to attach to the server"`
-	AttachHTTPPort int     `long:"http-port" description:"HTTP+SSE port to attach to the server"`
+	ModelPath  string  `long:"model" description:"path to the model file"`
+	ServerPath string  `long:"server" description:"path to the server executable"`
+	AttachHost string  `long:"host" description:"host address to attach to (default: 127.0.0.1)" default:"127.0.0.1"`
+	AttachPort int     `long:"port" description:"port to attach to the server (0 = spawn server)"`
+	Transport  string  `long:"transport" description:"transport protocol: grpc or http" default:"grpc"`
 	Temperature    float64 `long:"temperature" description:"sampling temperature" default:"0.7"`
 	TopP           float64 `long:"top-p" description:"top-p sampling" default:"1.0"`
 	TopK           int     `long:"top-k" description:"top-k sampling" default:"0"`
@@ -51,8 +51,13 @@ func main() {
 
 	logger.Infof("opts: %+v", opts)
 
-	if opts.ServerPath == "" && (opts.AttachGRPCPort == 0 && opts.AttachHTTPPort == 0) {
-		fmt.Println("Server path or attach gRPC or HTTP port is required")
+	if opts.Transport != "grpc" && opts.Transport != "http" {
+		fmt.Printf("Invalid transport %q: must be 'grpc' or 'http'\n", opts.Transport)
+		os.Exit(1)
+	}
+
+	if opts.ServerPath == "" && opts.AttachPort == 0 {
+		fmt.Println("Server path (--server) or attach port (--port) is required")
 		os.Exit(1)
 	}
 
@@ -75,10 +80,10 @@ func main() {
 	logger.Infof("Starting LLM service...")
 
 	llmServiceOptions := llmservice.LLMServiceOptions{
-		ServerPath:     opts.ServerPath,
-		AttachHost:     opts.AttachHost,
-		AttachGRPCPort: opts.AttachGRPCPort,
-		AttachHTTPPort: opts.AttachHTTPPort,
+		ServerPath: opts.ServerPath,
+		AttachHost: opts.AttachHost,
+		AttachPort: opts.AttachPort,
+		Transport:  opts.Transport,
 	}
 
 	llmService, err := llmservice.NewLlamacppLLMService(llmServiceOptions, logger)

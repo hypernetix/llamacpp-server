@@ -2,6 +2,7 @@
 #
 # Integration test script for llamacpp server
 # Runs Docker-based integration tests with configurable parameters
+# Tests both gRPC and HTTP transports sequentially
 #
 # Usage:
 #   ./scripts/integration-test.sh --model /path/to/model.gguf
@@ -144,6 +145,17 @@ if [[ -n "$MODEL_PATH" ]]; then
     export MODEL_PATH="$MODEL_PATH"
 fi
 
+# Container name suffixes
+if [[ "$CI_MODE" == true ]]; then
+    SERVER_CONTAINER="llamacpp-server-ci"
+    CLIENT_GRPC_CONTAINER="llamacpp-client-grpc-ci"
+    CLIENT_HTTP_CONTAINER="llamacpp-client-http-ci"
+else
+    SERVER_CONTAINER="llamacpp-server"
+    CLIENT_GRPC_CONTAINER="llamacpp-client-grpc"
+    CLIENT_HTTP_CONTAINER="llamacpp-client-http"
+fi
+
 # Cleanup function
 cleanup() {
     local exit_code=$?
@@ -158,7 +170,7 @@ cleanup() {
     fi
     
     if [[ $exit_code -eq 0 ]]; then
-        log_info "Integration test PASSED"
+        log_info "Integration test PASSED (both gRPC and HTTP)"
     else
         log_error "Integration test FAILED (exit code: $exit_code)"
     fi
@@ -167,7 +179,41 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Run the integration test
+# Run a single transport test
+# Uses --exit-code-from to get the client's exit code (not the server's SIGTERM code)
+# Usage: run_transport_test <transport_name> <client_service> <client_container>
+run_transport_test() {
+    local transport=$1
+    local client_service=$2
+    local client_container=$3
+
+    log_info ""
+    log_info "========================================="
+    log_info "  Running $transport integration test"
+    log_info "========================================="
+
+    # --exit-code-from ensures compose returns the client's exit code, not the
+    # server's SIGTERM exit code (137) from --abort-on-container-exit
+    local compose_exit=0
+    docker compose -f "$COMPOSE_FILE" up $BUILD_ARGS \
+        --abort-on-container-exit --exit-code-from "$client_service" \
+        --no-deps server "$client_service" || compose_exit=$?
+
+    log_info "Docker compose exit code: $compose_exit"
+
+    if [[ $compose_exit -ne 0 ]]; then
+        # Show actual client container exit code for debugging
+        local client_exit
+        client_exit=$(docker inspect "$client_container" --format='{{.State.ExitCode}}' 2>/dev/null || echo "unknown")
+        log_error "$transport test FAILED (compose exit: $compose_exit, client exit: $client_exit)"
+        return 1
+    fi
+
+    log_info "$transport test PASSED"
+    return 0
+}
+
+# Build and prepare
 log_info "Building and starting containers..."
 
 if [[ "$CI_MODE" == true ]]; then
@@ -178,40 +224,34 @@ if [[ "$CI_MODE" == true ]]; then
         log_error "Failed to download model"
         exit 1
     fi
-    
-    # Then run server and client (without model-downloader triggering abort)
-    log_info "Running server and client..."
-    COMPOSE_CMD="docker compose -f $COMPOSE_FILE up $BUILD_ARGS --abort-on-container-exit --no-deps server client"
-else
-    # Local mode: run all together
-    COMPOSE_CMD="docker compose -f $COMPOSE_FILE up $BUILD_ARGS --abort-on-container-exit"
 fi
 
-if [[ "$VERBOSE" == true ]]; then
-    $COMPOSE_CMD
-else
-    $COMPOSE_CMD 2>&1 | grep -v "^\s*$" | while read -r line; do
-        echo "$line"
-    done
+# Only pass --build on the first run; images are reused for the second
+FIRST_BUILD_ARGS="$BUILD_ARGS"
+
+# Run gRPC test
+run_transport_test "gRPC" "client-grpc" "$CLIENT_GRPC_CONTAINER"
+GRPC_EXIT=$?
+
+# Clear --build for second run (images already built)
+BUILD_ARGS=""
+
+if [[ $GRPC_EXIT -ne 0 ]]; then
+    log_error "gRPC test failed, skipping HTTP test"
+    exit $GRPC_EXIT
 fi
 
-# Get container names
-CLIENT_CONTAINER="llamacpp-client"
-SERVER_CONTAINER="llamacpp-server"
-if [[ "$CI_MODE" == true ]]; then
-    CLIENT_CONTAINER="llamacpp-client-ci"
-    SERVER_CONTAINER="llamacpp-server-ci"
+# Run HTTP test (server restarts, model reloads — acceptable for test)
+run_transport_test "HTTP" "client-http" "$CLIENT_HTTP_CONTAINER"
+HTTP_EXIT=$?
+
+if [[ $HTTP_EXIT -ne 0 ]]; then
+    exit $HTTP_EXIT
 fi
 
-# Check server exit code first (if server failed, test failed)
-SERVER_EXIT_CODE=$(docker inspect "$SERVER_CONTAINER" --format='{{.State.ExitCode}}' 2>/dev/null || echo "0")
-if [[ "$SERVER_EXIT_CODE" != "0" ]]; then
-    log_error "Server failed with exit code: $SERVER_EXIT_CODE"
-    exit "$SERVER_EXIT_CODE"
-fi
+log_info ""
+log_info "========================================="
+log_info "  All transport tests PASSED"
+log_info "========================================="
 
-# Get the exit code of the client container
-EXIT_CODE=$(docker inspect "$CLIENT_CONTAINER" --format='{{.State.ExitCode}}' 2>/dev/null || echo "1")
-
-exit "$EXIT_CODE"
-
+exit 0

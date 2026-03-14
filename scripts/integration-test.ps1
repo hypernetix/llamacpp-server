@@ -3,7 +3,8 @@
     Integration test script for llamacpp server (Windows PowerShell version)
 
 .DESCRIPTION
-    Runs Docker-based integration tests with configurable parameters
+    Runs Docker-based integration tests with configurable parameters.
+    Tests both gRPC and HTTP transports sequentially.
 
 .PARAMETER Model
     Path to local GGUF model file
@@ -63,11 +64,72 @@ Push-Location $ProjectRoot
 $TempModelDir = $null
 $ComposeFile = "docker/docker-compose.yml"
 
+# Container names
+$ServerContainer = "llamacpp-server"
+$ClientGrpcContainer = "llamacpp-client-grpc"
+$ClientHttpContainer = "llamacpp-client-http"
+
+function Run-TransportTest {
+    param(
+        [string]$Transport,
+        [string]$ClientService,
+        [string]$ClientContainer,
+        [bool]$DoBuild
+    )
+
+    Write-Info ""
+    Write-Info "========================================="
+    Write-Info "  Running $Transport integration test"
+    Write-Info "========================================="
+
+    $ComposeArgs = @("-f", $ComposeFile, "up", "--abort-on-container-exit", "--exit-code-from", $ClientService, "--no-deps", "server", $ClientService)
+    if ($DoBuild) {
+        $ComposeArgs += "--build"
+    }
+
+    Write-Info "Running: docker compose $($ComposeArgs -join ' ')"
+
+    # Temporarily allow stderr from native commands — docker compose writes
+    # status messages (e.g. "Container ... Creating") to stderr which PowerShell
+    # treats as terminating errors under $ErrorActionPreference = "Stop" + 2>&1.
+    $savedErrorPref = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+
+    # Capture all output to prevent pipeline leaking (which would corrupt the return value)
+    $composeOutput = & docker compose @ComposeArgs 2>&1
+    $composeExitCode = $LASTEXITCODE
+
+    $ErrorActionPreference = $savedErrorPref
+
+    # Display captured output via Write-Host (bypasses pipeline)
+    foreach ($line in $composeOutput) {
+        Write-Host $line
+    }
+
+    Write-Info "Docker compose exit code: $composeExitCode"
+
+    if ($composeExitCode -ne 0) {
+        # Double-check actual client container exit code
+        $savedErrorPref2 = $ErrorActionPreference
+        $ErrorActionPreference = "SilentlyContinue"
+        $clientExit = & docker inspect $ClientContainer --format='{{.State.ExitCode}}' 2>&1
+        $ErrorActionPreference = $savedErrorPref2
+        Write-Err "$Transport test FAILED (compose exit: $composeExitCode, client exit: $clientExit)"
+        return $composeExitCode
+    }
+
+    Write-Info "$Transport test PASSED"
+    return 0
+}
+
 try {
     # Validate inputs
     if ($CI) {
         Write-Info "Running in CI mode with default test model"
         $ComposeFile = "docker/docker-compose.ci.yml"
+        $ServerContainer = "llamacpp-server-ci"
+        $ClientGrpcContainer = "llamacpp-client-grpc-ci"
+        $ClientHttpContainer = "llamacpp-client-http-ci"
     }
     elseif ($ModelUrl) {
         Write-Info "Using model URL: $ModelUrl"
@@ -99,65 +161,44 @@ try {
     Write-Info "  Compose file: $ComposeFile"
     Write-Info "  Test mode: $TestMode"
 
-    # Run docker compose
+    # Build and prepare
     Write-Info "Building and starting containers..."
-    
+
     if ($CI) {
-        # In CI mode, first run the model downloader to completion
         Write-Info "Downloading test model..."
         $DownloadArgs = @("-f", $ComposeFile, "up", "--build", "model-downloader")
+        $savedErrorPref = $ErrorActionPreference
+        $ErrorActionPreference = "SilentlyContinue"
         & docker compose @DownloadArgs
-        if ($LASTEXITCODE -ne 0) {
+        $dlExitCode = $LASTEXITCODE
+        $ErrorActionPreference = $savedErrorPref
+        if ($dlExitCode -ne 0) {
             Write-Err "Failed to download model"
             exit 1
         }
-        
-        # Then run server and client (without model-downloader)
-        Write-Info "Running server and client..."
-        $ComposeArgs = @("-f", $ComposeFile, "up", "--abort-on-container-exit", "--no-deps", "server", "client")
-        if ($Build) {
-            $ComposeArgs += "--build"
-        }
-    }
-    else {
-        # Local mode: run all together
-        $ComposeArgs = @("-f", $ComposeFile, "up", "--abort-on-container-exit")
-        if ($Build) {
-            $ComposeArgs += "--build"
-        }
     }
 
-    & docker compose @ComposeArgs
-    $DockerExitCode = $LASTEXITCODE
+    # Run gRPC test (with --build if requested)
+    $GrpcExit = Run-TransportTest -Transport "gRPC" -ClientService "client-grpc" -ClientContainer $ClientGrpcContainer -DoBuild $Build.IsPresent
 
-    # Get client container exit code
-    $ClientContainer = if ($CI) { "llamacpp-client-ci" } else { "llamacpp-client" }
-    $ServerContainer = if ($CI) { "llamacpp-server-ci" } else { "llamacpp-server" }
-    
-    # Check server exit code first (if server failed, test failed)
-    $ServerExitCode = docker inspect $ServerContainer --format='{{.State.ExitCode}}' 2>$null
-    if ($ServerExitCode -and [int]$ServerExitCode -ne 0) {
-        Write-Err "Integration test FAILED (server exit code: $ServerExitCode)"
-        exit [int]$ServerExitCode
-    }
-    
-    # Check client exit code
-    $ClientExitCode = docker inspect $ClientContainer --format='{{.State.ExitCode}}' 2>$null
-    if (-not $ClientExitCode) { $ClientExitCode = 1 }
-    
-    # Also fail if docker compose itself failed
-    if ($DockerExitCode -ne 0 -and [int]$ClientExitCode -eq 0) {
-        $ClientExitCode = $DockerExitCode
+    if ($GrpcExit -ne 0) {
+        Write-Err "gRPC test failed (exit code: $GrpcExit), skipping HTTP test"
+        exit $GrpcExit
     }
 
-    if ([int]$ClientExitCode -eq 0) {
-        Write-Info "Integration test PASSED"
-    }
-    else {
-        Write-Err "Integration test FAILED (exit code: $ClientExitCode)"
+    # Run HTTP test (no rebuild needed, images already built)
+    $HttpExit = Run-TransportTest -Transport "HTTP" -ClientService "client-http" -ClientContainer $ClientHttpContainer -DoBuild $false
+
+    if ($HttpExit -ne 0) {
+        exit $HttpExit
     }
 
-    exit [int]$ClientExitCode
+    Write-Info ""
+    Write-Info "========================================="
+    Write-Info "  All transport tests PASSED"
+    Write-Info "========================================="
+
+    exit 0
 }
 finally {
     # Temporarily allow errors for cleanup (docker compose outputs to stderr)
@@ -181,4 +222,3 @@ finally {
 
     Pop-Location
 }
-

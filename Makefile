@@ -38,11 +38,11 @@ GRPC_PORT ?= 50052
 # Default port for HTTP+SSE server (empty = disabled)
 HTTP_PORT ?= 8082
 
-# Default port for gRPC client test
-ATTACH_GRPC_PORT ?= 0
+# Default port for client test (0 = spawn server automatically)
+ATTACH_PORT ?= 0
 
-# Default port for HTTP+SSE client test
-ATTACH_HTTP_PORT ?= 0
+# Default transport for client test (grpc or http)
+TRANSPORT ?= grpc
 
 # Default path for llamacpp server
 ifeq ($(OS),Windows_NT)
@@ -406,7 +406,7 @@ ifeq ($(MODEL_PATH),)
 endif
 	@echo ""
 	@echo "=== Running llamacpp client test ==="
-	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/llamacppclienttest/llamacppclienttest$(EXE) --grpc-port $(ATTACH_GRPC_PORT) --http-port $(ATTACH_HTTP_PORT) --server "$(SERVER_PATH)" --model "$(MODEL_PATH)"
+	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/llamacppclienttest/llamacppclienttest$(EXE) --port $(ATTACH_PORT) --transport $(TRANSPORT) --server "$(SERVER_PATH)" --model "$(MODEL_PATH)"
 
 # Default parallel count for parallel test
 PARALLEL_N ?= 4
@@ -420,7 +420,7 @@ ifeq ($(MODEL_PATH),)
 endif
 	@echo ""
 	@echo "=== Running parallel inference test ($(PARALLEL_N) concurrent requests) ==="
-	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/llamacppclienttest/llamacppclienttest$(EXE) --grpc-port $(ATTACH_GRPC_PORT) --http-port $(ATTACH_HTTP_PORT) --server "$(SERVER_PATH)" --model "$(MODEL_PATH)" --test-mode parallel --parallel-n $(PARALLEL_N)
+	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/llamacppclienttest/llamacppclienttest$(EXE) --port $(ATTACH_PORT) --transport $(TRANSPORT) --server "$(SERVER_PATH)" --model "$(MODEL_PATH)" --test-mode parallel --parallel-n $(PARALLEL_N)
 
 run-inferencetest1: build-inferencetest1 copy-dlls-inferencetest1
 ifeq ($(MODEL_PATH),)
@@ -510,8 +510,8 @@ help:
 	@echo "  LLAMA_VERSION  	- llama.cpp version (default: $(LLAMA_VERSION))"
 	@echo "  GRPC_PORT      	- gRPC server port (default: $(GRPC_PORT))"
 	@echo "  HTTP_PORT      	- HTTP+SSE server port (default: disabled)"
-	@echo "  ATTACH_GRPC_PORT 	- gRPC client test port (default: $(ATTACH_GRPC_PORT))"
-	@echo "  ATTACH_HTTP_PORT 	- HTTP+SSE client test port (default: $(ATTACH_HTTP_PORT))"
+	@echo "  ATTACH_PORT    	- Client test port, 0 = spawn server (default: $(ATTACH_PORT))"
+	@echo "  TRANSPORT      	- Client test transport: grpc or http (default: $(TRANSPORT))"
 	@echo "  SERVER_PATH 	- Path to llamacpp server executable (default: $(SERVER_PATH))"
 	@echo "  MODEL_PATH     	- Path to GGUF model file"
 	@echo "  PARALLEL_N     	- Number of concurrent requests for parallel test (default: 4)"

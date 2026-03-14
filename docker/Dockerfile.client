@@ -4,7 +4,7 @@
 # Uses the project Makefile for consistent build process
 #
 # Build: docker build -f docker/Dockerfile.client -t llamacpp-client .
-# Run:   docker run --network host llamacpp-client --host server --grpc-port 50051 --model /models/model.gguf
+# Run:   docker run --network host llamacpp-client --host server --port 50051 --transport grpc --model /models/model.gguf
 
 # =============================================================================
 # Stage 1: Build Go binary using Makefile
