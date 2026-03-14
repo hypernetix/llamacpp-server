@@ -1,13 +1,13 @@
 # Docker Compose for CI integration tests
-# Downloads the test model automatically, then tests both gRPC and HTTP transports
+# Downloads the test model automatically, then tests gRPC, HTTP, and parallel inference
 #
 # Usage:
 #   docker compose -f docker/docker-compose.ci.yml up --build --abort-on-container-exit
 #
 # This compose file:
 # 1. Downloads the test model (SmolLM2-135M) in an init container
-# 2. Starts the llamacpp server with both gRPC and HTTP ports
-# 3. Runs client tests for both transports sequentially (via integration script)
+# 2. Runs gRPC and HTTP tests against a single-slot server
+# 3. Runs parallel inference test against a 4-slot server
 # 4. Exits with the client's exit code
 
 services:
@@ -103,6 +103,45 @@ services:
       --transport http
       --model /models/${MODEL_NAME:-SmolLM2-135M-Instruct-Q4_K_M.gguf}
       --test-mode greedy
+      --temperature 0
+      --max-tokens 50
+    restart: "no"
+
+  # Multi-slot server (4 parallel inference slots)
+  server-cb:
+    image: llamacpp-server:${IMAGE_TAG:-ci}
+    container_name: llamacpp-server-cb-ci
+    depends_on:
+      model-downloader:
+        condition: service_completed_successfully
+    volumes:
+      - model-data:/models:ro
+    environment:
+      - LD_LIBRARY_PATH=/app
+      - MODEL_NAME=${MODEL_NAME:-SmolLM2-135M-Instruct-Q4_K_M.gguf}
+    command: ["--grpc-port", "50051", "--n-parallel", "4"]
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/50051' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: "no"
+
+  # Parallel inference client test (against multi-slot server)
+  client-grpc-cb:
+    image: llamacpp-client:${IMAGE_TAG:-ci}
+    container_name: llamacpp-client-grpc-cb-ci
+    depends_on:
+      server-cb:
+        condition: service_healthy
+    command: >
+      --host server-cb
+      --port 50051
+      --transport grpc
+      --model /models/${MODEL_NAME:-SmolLM2-135M-Instruct-Q4_K_M.gguf}
+      --test-mode parallel
+      --parallel-n 4
       --temperature 0
       --max-tokens 50
     restart: "no"

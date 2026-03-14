@@ -33,12 +33,11 @@ type flagOptions struct {
 	MainGpu      int    `long:"main-gpu" default:"0" description:"main GPU index when split-mode=none"`
 	TensorSplit  string `long:"tensor-split" default:"" description:"GPU split proportions, comma-separated (e.g. '0.5,0.5' for even 2-GPU split)"`
 	FlashAttn    bool   `long:"flash-attn" description:"enable flash attention for faster inference"`
-	NParallel    int    `long:"n-parallel" default:"0" description:"max concurrent inference requests (0=unlimited)"`
+	NParallel    int    `long:"n-parallel" default:"1" description:"number of concurrent inference slots (default 1)"`
 	Threads      int    `long:"threads" default:"0" description:"number of threads for generation (0=auto-detect)"`
 	ThreadsBatch int    `long:"threads-batch" default:"0" description:"number of threads for batch/prompt processing (0=auto-detect)"`
-	CtxSize            int  `long:"ctx-size" default:"4096" description:"context window size per inference slot"`
-	BatchSize          int  `long:"batch-size" default:"2048" description:"batch size for prompt processing"`
-	ContinuousBatching bool `long:"continuous-batching" description:"enable continuous batching (shared context, multi-slot scheduler)"`
+	CtxSize      int    `long:"ctx-size" default:"4096" description:"total KV cache size (per-slot budget = ctx-size / n-parallel)"`
+	BatchSize    int    `long:"batch-size" default:"2048" description:"batch size for prompt processing"`
 }
 
 func main() {
@@ -104,9 +103,8 @@ func main() {
 			NParallel:          opts.NParallel,
 			NThreads:           opts.Threads,
 			NThreadsBatch:      opts.ThreadsBatch,
-			CtxSize:            opts.CtxSize,
-			BatchSize:          opts.BatchSize,
-			ContinuousBatching: opts.ContinuousBatching,
+			CtxSize:   opts.CtxSize,
+			BatchSize: opts.BatchSize,
 		},
 	}
 
@@ -114,17 +112,11 @@ func main() {
 	if len(tensorSplit) > 0 {
 		logger.Infof("Tensor split: %v", tensorSplit)
 	}
-	if opts.NParallel > 0 {
-		logger.Infof("Max concurrent predictions: %d", opts.NParallel)
-	} else {
-		logger.Infof("Max concurrent predictions: unlimited")
-	}
+	logger.Infof("Inference slots (n_parallel): %d", opts.NParallel)
 	if opts.FlashAttn {
 		logger.Infof("Flash attention: enabled")
 	}
-	if opts.ContinuousBatching {
-		logger.Infof("Continuous batching: enabled")
-	}
+	logger.Infof("Mode: continuous batching")
 
 	service := llmservice.NewService(serviceOpts, logger)
 

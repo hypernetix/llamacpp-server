@@ -11,9 +11,9 @@
 #
 # Run targets:
 #   make run-llamacppserver  - Run the llamacpp server
-#   make run-llamacppclienttest  - Run the llamacpp client test
-#   make run-paralleltest    - Run the parallel inference test
-#   make run-batchtest       - Run the continuous batching test
+#   make run-baselinetest       - Run the baseline inference test
+#   make run-paralleltest    - Run parallel inference test (N concurrent slots)
+#   make run-backpressuretest - Backpressure test (2N reqs, N slots)
 #   make run-inferencetest1  - Run inference test 1
 #   make run-inferencetest2  - Run inference test 2
 
@@ -52,7 +52,7 @@ else
 	SERVER_PATH ?= "./cmd/llamacppserver/llamacppserver"
 endif
 
-# Default model path (override with: make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf)
+# Default model path (override with: make run-baselinetest MODEL_PATH=/path/to/model.gguf)
 MODEL_PATH ?=
 
 # =============================================================================
@@ -130,7 +130,7 @@ endif
 .PHONY: all prepare build clean help check-deps print-llama-version
 .PHONY: download-binaries import-libs
 .PHONY: build-llamacppserver build-llamacppclienttest build-inferencetest1 build-inferencetest2
-.PHONY: run-llamacppserver run-llamacppclienttest run-paralleltest run-batchtest run-inferencetest1 run-inferencetest2
+.PHONY: run-llamacppserver run-baselinetest run-paralleltest run-backpressuretest run-inferencetest1 run-inferencetest2
 .PHONY: copy-dlls-llamacppserver copy-dlls-llamacppclienttest copy-dlls-inferencetest1 copy-dlls-inferencetest2
 .PHONY: docker-build docker-build-server docker-build-client
 .PHONY: docker-integration-test docker-integration-test-ci docker-clean
@@ -139,7 +139,7 @@ all: prepare build
 	@echo ""
 	@echo "=== Build Complete ==="
 	@echo "Executables built in cmd/*/."
-	@echo "Run with: make run-llamacppserver, make run-llamacppclienttest, etc."
+	@echo "Run with: make run-llamacppserver, make run-baselinetest, etc."
 
 prepare: download-binaries import-libs
 	@echo ""
@@ -399,14 +399,14 @@ ifdef HTTP_PORT
 	$(RUN_ENV_GRPCSERVER) ./cmd/llamacppserver/llamacppserver$(EXE) --http-port $(HTTP_PORT)
 endif
 
-run-llamacppclienttest: build-llamacppclienttest copy-dlls-llamacppclienttest copy-dlls-llamacppserver
+run-baselinetest: build-llamacppclienttest copy-dlls-llamacppclienttest copy-dlls-llamacppserver
 ifeq ($(MODEL_PATH),)
 	@echo "Error: MODEL_PATH is required"
-	@echo "Usage: make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf"
+	@echo "Usage: make run-baselinetest MODEL_PATH=/path/to/model.gguf"
 	@exit 1
 endif
 	@echo ""
-	@echo "=== Running llamacpp client test ==="
+	@echo "=== Running baseline inference test ==="
 	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/llamacppclienttest/llamacppclienttest$(EXE) --port $(ATTACH_PORT) --transport $(TRANSPORT) --server "$(SERVER_PATH)" --model "$(MODEL_PATH)"
 
 # Default parallel count for parallel test
@@ -420,19 +420,19 @@ ifeq ($(MODEL_PATH),)
 	@exit 1
 endif
 	@echo ""
-	@echo "=== Running parallel inference test ($(PARALLEL_N) concurrent requests) ==="
+	@echo "=== Running parallel inference test ($(PARALLEL_N) slots) ==="
 	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/llamacppclienttest/llamacppclienttest$(EXE) --port $(ATTACH_PORT) --transport $(TRANSPORT) --server "$(SERVER_PATH)" --model "$(MODEL_PATH)" --test-mode parallel --parallel-n $(PARALLEL_N)
 
-run-batchtest: build-llamacppclienttest copy-dlls-llamacppclienttest copy-dlls-llamacppserver
+run-backpressuretest: build-llamacppclienttest copy-dlls-llamacppclienttest copy-dlls-llamacppserver
 ifeq ($(MODEL_PATH),)
 	@echo "Error: MODEL_PATH is required"
-	@echo "Usage: make run-batchtest MODEL_PATH=/path/to/model.gguf"
-	@echo "       make run-batchtest MODEL_PATH=/path/to/model.gguf PARALLEL_N=4"
+	@echo "Usage: make run-backpressuretest MODEL_PATH=/path/to/model.gguf"
+	@echo "       make run-backpressuretest MODEL_PATH=/path/to/model.gguf PARALLEL_N=8"
 	@exit 1
 endif
 	@echo ""
-	@echo "=== Running continuous batching test ($(PARALLEL_N) slots, parallel requests) ==="
-	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/llamacppclienttest/llamacppclienttest$(EXE) --port $(ATTACH_PORT) --transport $(TRANSPORT) --server "$(SERVER_PATH)" --model "$(MODEL_PATH)" --test-mode parallel --parallel-n $(PARALLEL_N) --continuous-batching
+	@echo "=== Running backpressure test ($(PARALLEL_N) slots, 2x requests) ==="
+	$(RUN_ENV_GRPCCLIENTTEST) ./cmd/llamacppclienttest/llamacppclienttest$(EXE) --transport $(TRANSPORT) --server "$(SERVER_PATH)" --model "$(MODEL_PATH)" --test-mode backpressure --parallel-n $(PARALLEL_N) --max-tokens 50
 
 run-inferencetest1: build-inferencetest1 copy-dlls-inferencetest1
 ifeq ($(MODEL_PATH),)
@@ -505,9 +505,9 @@ help:
 	@echo ""
 	@echo "Run targets:"
 	@echo "  make run-llamacppserver                      - Run llamacpp server"
-	@echo "  make run-llamacppclienttest MODEL_PATH=<path>    - Run llamacpp client test"
-	@echo "  make run-paralleltest MODEL_PATH=<path>      - Run parallel inference test"
-	@echo "  make run-batchtest MODEL_PATH=<path>         - Run continuous batching test"
+	@echo "  make run-baselinetest MODEL_PATH=<path>          - Run baseline inference test"
+	@echo "  make run-paralleltest MODEL_PATH=<path>      - Run parallel inference test (N slots)"
+	@echo "  make run-backpressuretest MODEL_PATH=<path>  - Backpressure test (2N reqs, N slots)"
 	@echo "  make run-inferencetest1 MODEL_PATH=<path>    - Run inference test 1"
 	@echo "  make run-inferencetest2 MODEL_PATH=<path>    - Run inference test 2"
 	@echo ""
@@ -540,9 +540,9 @@ help:
 	@echo "  make run-llamacppserver GRPC_PORT=50053"
 	@echo "  make run-llamacppserver HTTP_PORT=8083"
 	@echo "  make run-llamacppserver GRPC_PORT=50053 HTTP_PORT=8083"
-	@echo "  make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf"
+	@echo "  make run-baselinetest MODEL_PATH=/path/to/model.gguf"
 	@echo "  make run-paralleltest MODEL_PATH=/path/to/model.gguf PARALLEL_N=8"
-	@echo "  make run-batchtest MODEL_PATH=/path/to/model.gguf PARALLEL_N=4"
+	@echo "  make run-backpressuretest MODEL_PATH=/path/to/model.gguf PARALLEL_N=4"
 	@echo "  make LLAMA_VERSION=b6800 prepare"
 	@echo "  make docker-integration-test MODEL_PATH=/path/to/model.gguf"
 	@echo "  make docker-integration-test-ci"

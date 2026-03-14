@@ -3,11 +3,19 @@ package llmservice
 import (
 	"fmt"
 
-	"github.com/hypernetix/llamacpp_server/internal/engine"
-	"github.com/hypernetix/llamacpp_server/internal/inference"
+	"github.com/hypernetix/llamacpp_server/internal/inferenceengine"
 	"github.com/hypernetix/llamacpp_server/internal/logging"
 	"github.com/hypernetix/llamacpp_server/internal/modelmanagement"
 )
+
+type PredictOptions struct {
+	FlashAttn     bool
+	NParallel     int
+	NThreads      int
+	NThreadsBatch int
+	CtxSize       int
+	BatchSize     int
+}
 
 type Options struct {
 	Model   LoadModelOptions
@@ -16,7 +24,7 @@ type Options struct {
 
 type Service struct {
 	modelManager       modelmanagement.ModelManager
-	predictionsManager inference.PredictionsManager
+	predictionsManager inferenceengine.PredictionsManager
 	logger             logging.SprintfLogger
 }
 
@@ -24,25 +32,20 @@ func NewService(opts Options, logger logging.SprintfLogger) *Service {
 	loadModelFunc := newLoadModelFunc(opts.Model, logger)
 	modelMgr := modelmanagement.NewModelManager(loadModelFunc, logger)
 
-	var predictionsMgr inference.PredictionsManager
-	if opts.Predict.ContinuousBatching {
-		nParallel := opts.Predict.NParallel
-		if nParallel <= 0 {
-			nParallel = 1
-		}
-		predictionsMgr = engine.New(engine.Options{
-			NParallel:     nParallel,
-			CtxSize:       opts.Predict.CtxSize,
-			BatchSize:     opts.Predict.BatchSize,
-			NThreads:      opts.Predict.NThreads,
-			NThreadsBatch: opts.Predict.NThreadsBatch,
-			FlashAttn:     opts.Predict.FlashAttn,
-		}, logger)
-		logger.Infof("continuous batching enabled (slots=%d)", nParallel)
-	} else {
-		predictFunc := newPredictFunc(opts.Predict, logger)
-		predictionsMgr = inference.NewPredictionsManager(predictFunc, opts.Predict.NParallel)
+	nParallel := opts.Predict.NParallel
+	if nParallel <= 0 {
+		nParallel = 1
 	}
+
+	predictionsMgr := inferenceengine.New(inferenceengine.Options{
+		NParallel:     nParallel,
+		CtxSize:       opts.Predict.CtxSize,
+		BatchSize:     opts.Predict.BatchSize,
+		NThreads:      opts.Predict.NThreads,
+		NThreadsBatch: opts.Predict.NThreadsBatch,
+		FlashAttn:     opts.Predict.FlashAttn,
+	}, logger)
+	logger.Infof("continuous batching enabled (slots=%d)", nParallel)
 
 	return &Service{
 		modelManager:       modelMgr,
@@ -66,7 +69,7 @@ func (s *Service) LoadModel(path string, onProgress func(float32)) error {
 	return nil
 }
 
-func (s *Service) Predict(modelPath string, prompt string, args inference.PredictArgs, stream inference.StreamFunc) (string, error) {
+func (s *Service) Predict(modelPath string, prompt string, args inferenceengine.PredictArgs, stream inferenceengine.StreamFunc) (string, error) {
 	model, err := s.modelManager.GetModel(modelPath)
 	if err != nil {
 		return "", err

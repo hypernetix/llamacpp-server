@@ -1,25 +1,28 @@
 # llama.cpp Go Server
 
-A Go project for serving Large Language Models locally using **LLaMA.cpp** with gRPC interface.
+A Go server for running Large Language Models locally using **llama.cpp** with
+dual **gRPC** and **HTTP+SSE** interfaces.
 
 ## Features
 
-- **gRPC Interface**: Clean API for model loading and text generation
-- **Streaming Support**: Real-time text generation with streaming responses
-- **Model Management**: Automatic loading and caching of GGUF models
-- **Cross-platform**: Windows, Linux, and macOS support
-- **GPU Acceleration**: CUDA (Windows/Linux) and Metal (macOS) support
-- **Docker Support**: Ready-to-use Docker images for containerized deployment
-- **CI/CD**: GitHub Actions workflow with automated testing
+- **Dual API**: gRPC (Protobuf streaming) and HTTP+SSE interfaces — use either or both simultaneously
+- **Streaming Inference**: Real-time token-by-token generation via gRPC server streaming or Server-Sent Events
+- **Continuous Batching**: Shared-context inference engine that processes multiple concurrent requests in a single batched forward pass
+- **Parallel Inference Slots**: Configurable `--n-parallel` to serve multiple requests concurrently with efficient KV cache sharing
+- **Model Management**: Automatic loading and caching of GGUF models with progress reporting
+- **GPU Acceleration**: CUDA (Windows/Linux), Metal (macOS), and Vulkan support
+- **Multi-GPU**: Pipeline parallelism (`--split-mode layer`) and tensor parallelism (`--split-mode row`)
+- **Cross-Platform**: Windows, Linux, and macOS — native builds and Docker images
+- **CI/CD**: GitHub Actions workflow with automated multi-platform builds and integration tests
 
 ## Quick Start
 
 ```bash
-# Full build: download binaries + build all Go executables
+# Full build: download llama.cpp binaries + build all Go executables
 make all
 
-# Run client test, it will run, connect and send test request to llamacpp server with a specified model
-make run-llamacppclienttest MODEL_PATH=/path/to/your/model.gguf
+# Run a baseline inference test (spawns server, loads model, runs inference)
+make run-baselinetest MODEL_PATH=/path/to/your/model.gguf
 ```
 
 ### Quick Start with Docker
@@ -38,7 +41,7 @@ make docker-integration-test-ci
 
 - **Go** 1.22 or later
 - **Make** (GNU Make)
-- **GCC/MinGW** - C compiler for CGO
+- **GCC/MinGW** — C compiler for CGO
   - Windows: MinGW-w64 via MSYS2 (includes `gendef`, `dlltool` for import libraries)
   - Linux: `build-essential` package
   - macOS: Xcode command line tools
@@ -51,6 +54,7 @@ make docker-integration-test-ci
 ### Windows-specific Setup
 
 Install MSYS2 and required tools:
+
 ```powershell
 # Install MSYS2 from https://www.msys2.org/
 # Then in MSYS2 terminal:
@@ -61,11 +65,7 @@ pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-tools-git
 
 ### macOS-specific Setup
 
-Install Homebrew and required dependencies:
 ```bash
-# Install Homebrew (if not already installed)
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
 # Install libomp (required for OpenMP support in llama.cpp)
 brew install libomp
 
@@ -88,28 +88,36 @@ brew install go
 ### Individual Build Targets
 
 ```bash
-make build-llamacppserver      # Build llamacpp server
-make build-llamacppclienttest  # Build llamacpp client test
-make build-inferencetest1  # Build inference test 1
-make build-inferencetest2  # Build inference test 2
+make build-llamacppserver      # Build the server
+make build-llamacppclienttest  # Build the client test tool
+make build-inferencetest1      # Build low-level inference test 1
+make build-inferencetest2      # Build low-level inference test 2
 ```
 
 ### Run Targets
 
 ```bash
-# Start llamacpp server (default gRPC port 50052)
+# Start server with default ports (gRPC 50052, HTTP 8082)
 make run-llamacppserver
 
-# Start server on custom port
+# Start server on custom ports
 make run-llamacppserver GRPC_PORT=50053
+make run-llamacppserver HTTP_PORT=8083
+make run-llamacppserver GRPC_PORT=50053 HTTP_PORT=8083
 
 # Run tests (MODEL_PATH required)
+make run-baselinetest MODEL_PATH=/path/to/model.gguf                  # spawn server, test via gRPC
+make run-baselinetest MODEL_PATH=/path/to/model.gguf TRANSPORT=http   # spawn server, test via HTTP
+make run-paralleltest MODEL_PATH=/path/to/model.gguf                  # 4-slot concurrent inference test
+make run-backpressuretest MODEL_PATH=/path/to/model.gguf              # oversubscription test (2N requests for N slots)
+
+# Attach to an already running server
+make run-baselinetest SERVER_PATH='' ATTACH_PORT=50052 MODEL_PATH=/path/to/model.gguf
+make run-baselinetest SERVER_PATH='' ATTACH_PORT=8082 TRANSPORT=http MODEL_PATH=/path/to/model.gguf
+
+# Low-level inference tests (no server, direct llama.cpp bindings)
 make run-inferencetest1 MODEL_PATH=/path/to/model.gguf
 make run-inferencetest2 MODEL_PATH=/path/to/model.gguf
-make run-llamacppclienttest SERVER_PATH='' ATTACH_PORT=50053 MODEL_PATH=/path/to/model.gguf  # attach to running gRPC server
-make run-llamacppclienttest SERVER_PATH='' ATTACH_PORT=8080 TRANSPORT=http MODEL_PATH=/path/to/model.gguf  # attach to running HTTP server
-make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf  # spawn server, test via gRPC (default)
-make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf TRANSPORT=http  # spawn server, test via HTTP
 ```
 
 ### Docker Targets
@@ -117,8 +125,8 @@ make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf TRANSPORT=http  # spa
 | Target | Description |
 |--------|-------------|
 | `make docker-build` | Build all Docker images (server + client) |
-| `make docker-build-server` | Build llamacpp server Docker image |
-| `make docker-build-client` | Build llamacpp client test Docker image |
+| `make docker-build-server` | Build server Docker image |
+| `make docker-build-client` | Build client test Docker image |
 | `make docker-integration-test MODEL_PATH=<path>` | Run integration test with local model |
 | `make docker-integration-test-ci` | Run integration test (downloads test model) |
 | `make docker-clean` | Remove Docker images and volumes |
@@ -130,10 +138,10 @@ make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf TRANSPORT=http  # spa
 | `LLAMA_VERSION` | *(see Makefile)* | llama.cpp release version to download |
 | `GRPC_PORT` | `50052` | gRPC server port |
 | `HTTP_PORT` | `8082` | HTTP+SSE server port |
-| `MODEL_PATH` | (none) | Path to GGUF model file (required for tests) |
-| `ATTACH_PORT` | `0` | Port of already running server (0 = spawn server), for llamacppclienttest |
-| `TRANSPORT` | `grpc` | Transport protocol: `grpc` or `http`, for llamacppclienttest |
-| `SERVER_PATH` | (auto) | Path of server executable to run, for llamacppclienttest |
+| `MODEL_PATH` | *(none)* | Path to GGUF model file (required for tests) |
+| `ATTACH_PORT` | `0` | Port of already running server (0 = spawn server) |
+| `TRANSPORT` | `grpc` | Transport protocol: `grpc` or `http` |
+| `SERVER_PATH` | *(auto)* | Path to server executable |
 | `IMAGE_TAG` | `latest` | Docker image tag |
 
 ### Using Different llama.cpp Versions
@@ -153,98 +161,153 @@ make docker-build LLAMA_VERSION=b6800
 
 ```
 .
-├── Makefile                 # Unified build system
-├── build/
-│   └── llama-binaries/      # Downloaded binaries (auto-created)
-│       ├── bin/             # llama.cpp executables
-│       ├── lib/             # DLLs/shared libraries + import libs
-│       └── include/         # Header files
+├── Makefile                    # Unified build system
 ├── api/
-│   └── proto/               # Protocol buffer definitions
+│   ├── proto/                  # gRPC / Protobuf API definition
+│   │   ├── llmserver.proto
+│   │   ├── llmserver.pb.go     # Generated Go code
+│   │   └── llmserver_grpc.pb.go
+│   └── http/                   # HTTP+SSE API definition
+│       └── openapi.yaml        # OpenAPI 3.1 specification
 ├── cmd/
-│   ├── llamacppserver/      # llama.cpp server application
-│   ├── llamacppclienttest/  # llama.cpp client test
-│   ├── inferencetest1/      # Direct inference test 1
-│   └── inferencetest2/      # Direct inference test 2
-├── docker/
-│   ├── Dockerfile.server    # llama.cpp server Docker image
-│   ├── Dockerfile.client    # Client test Docker image
-│   ├── docker-compose.yml   # Local integration testing
-│   └── docker-compose.ci.yml # CI integration testing
-├── scripts/
-│   ├── integration-test.sh  # Integration test runner (Linux/macOS)
-│   └── integration-test.ps1 # Integration test runner (Windows)
+│   ├── llamacppserver/         # Server application (gRPC + HTTP)
+│   ├── llamacppclienttest/     # Client test tool (gRPC + HTTP)
+│   │   └── llmservice/         # Server lifecycle & transport clients
+│   ├── inferencetest1/         # Low-level inference test 1
+│   └── inferencetest2/         # Low-level inference test 2
 ├── internal/
-│   ├── bindings/            # CGO bindings to llama.cpp
-│   ├── grpcserver/          # gRPC server implementation
-│   ├── httpserver/          # HTTP server implementation
-│   ├── inference/           # Model inference
-│   ├── llmservice/          # Protocol-agnostic service implementation
-│   ├── logging/             # Logging utilities
-│   └── modelmanagement/     # Model loading and caching
+│   ├── bindings/               # CGO bindings to llama.cpp C API
+│   ├── inferenceengine/        # Continuous batching scheduler, slots, sampler
+│   ├── llmservice/             # Transport-agnostic service layer
+│   ├── grpcserver/             # gRPC server implementation
+│   ├── httpserver/             # HTTP+SSE server implementation
+│   ├── modelmanagement/        # Model loading and caching
+│   └── logging/                # Structured logging
+├── docker/
+│   ├── Dockerfile.server       # Server Docker image
+│   ├── Dockerfile.client       # Client test Docker image
+│   ├── docker-compose.yml      # Local integration testing
+│   └── docker-compose.ci.yml   # CI integration testing
+├── scripts/
+│   ├── integration-test.sh     # Integration test runner (Linux/macOS)
+│   └── integration-test.ps1   # Integration test runner (Windows)
+├── docs/
+│   ├── PARALLELISM.md          # Parallelism modes and comparison with other solutions
+│   └── CONTINUOUS_BATCHING.md  # Continuous batching architecture and benchmarks
 └── .github/
     └── workflows/
-        └── ci.yml           # GitHub Actions CI workflow
+        └── ci.yml              # GitHub Actions CI workflow
 ```
 
 ## Usage
 
-### gRPC Server
+### Server
 
 ```bash
-# Start server (binds to 127.0.0.1 by default)
-./cmd/llamacppserver/llamacppserver --grpc-port 50052
+# Start with both gRPC and HTTP interfaces (native defaults: 50052 / 8082)
+./cmd/llamacppserver/llamacppserver --grpc-port 50052 --http-port 8082
 
-# Start server binding to all interfaces (for Docker/remote access)
-./cmd/llamacppserver/llamacppserver --host 0.0.0.0 --grpc-port 50052
+# Start with 4 parallel inference slots and flash attention
+./cmd/llamacppserver/llamacppserver --grpc-port 50052 --http-port 8082 --n-parallel 4 --flash-attn
+
+# Bind to all interfaces (for Docker / remote access)
+./cmd/llamacppserver/llamacppserver --host 0.0.0.0 --grpc-port 50052 --http-port 8082
 
 # Or via make
-make run-llamacppserver GRPC_PORT=50052
+make run-llamacppserver
 ```
 
 #### Server Command Line Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--host` | `127.0.0.1` | Host address to bind (use `0.0.0.0` for Docker) |
-| `--grpc-port` | `50051` | Port to listen for gRPC connections |
+| `--host` | `127.0.0.1` | Host address to bind (use `0.0.0.0` for Docker/remote) |
+| `--grpc-port` | `50052` | gRPC server port (disabled if empty) |
+| `--http-port` | `8082` | HTTP+SSE server port (disabled if empty) |
 | `--ngpu` | `99` | Number of GPU layers to offload |
 | `--mmap` | `false` | Use memory-mapped I/O for model loading |
+| `--flash-attn` | `false` | Enable flash attention for faster inference |
+| `--n-parallel` | `1` | Number of concurrent inference slots |
+| `--ctx-size` | `4096` | Total KV cache size (per-slot budget = ctx-size / n-parallel) |
+| `--batch-size` | `2048` | Batch size for prompt processing |
+| `--threads` | `0` | Threads for token generation (0 = auto) |
+| `--threads-batch` | `0` | Threads for batch/prompt processing (0 = auto) |
+| `--split-mode` | `layer` | Multi-GPU split: `none`, `layer` (pipeline), `row` (tensor parallelism) |
+| `--main-gpu` | `0` | Main GPU index when `split-mode=none` |
+| `--tensor-split` | *(empty)* | GPU split proportions, comma-separated (e.g. `0.5,0.5`) |
 
-### gRPC Client Test
+### Client Test
 
 ```bash
-# Run client test against running gRPC server
+# Test against running gRPC server
 ./cmd/llamacppclienttest/llamacppclienttest --host 127.0.0.1 --port 50052 --transport grpc --model /path/to/model.gguf
 
-# Run client test against running HTTP server
+# Test against running HTTP server
 ./cmd/llamacppclienttest/llamacppclienttest --host 127.0.0.1 --port 8082 --transport http --model /path/to/model.gguf
 
 # Or via make
-make run-llamacppclienttest MODEL_PATH=/path/to/model.gguf
+make run-baselinetest MODEL_PATH=/path/to/model.gguf
 ```
 
 #### Client Test Command Line Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--host` | `127.0.0.1` | Server host address to connect to |
-| `--port` | `0` | Server port to connect to (0 = spawn server) |
+| `--host` | `127.0.0.1` | Server host address |
+| `--port` | `0` | Server port (0 = spawn a new server) |
 | `--transport` | `grpc` | Transport protocol: `grpc` or `http` |
-| `--server` | (none) | Path to server executable (starts server automatically) |
-| `--model` | (none) | Path to GGUF model file (required) |
+| `--server` | *(auto)* | Path to server executable |
+| `--model` | *(none)* | Path to GGUF model file (required) |
+| `--test-mode` | `baseline` | Test mode (see below) |
+| `--max-tokens` | `100` | Maximum tokens to generate |
 | `--temperature` | `0.7` | Sampling temperature |
 | `--top-p` | `1.0` | Top-p (nucleus) sampling |
 | `--top-k` | `0` | Top-k sampling (0 = disabled) |
-| `--max-tokens` | `100` | Maximum tokens to generate |
-| `--test-mode` | `baseline` | Test mode: `baseline`, `greedy`, `seeded`, `stress` |
+| `--min-p` | `0.05` | Min-p sampling threshold |
+| `--repeat-penalty` | `1.0` | Repetition penalty (1.0 = disabled) |
 | `--seed` | `-1` | Random seed (-1 = random) |
+| `--parallel-n` | `4` | Concurrent requests for parallel/backpressure modes |
+
+#### Test Modes
+
+| Mode | Description |
+|------|-------------|
+| `baseline` | Single inference request with default sampling |
+| `greedy` | Deterministic inference (temperature=0) |
+| `seeded` | Two runs with the same seed — verifies identical output |
+| `stress` | Sequential multi-prompt stress test |
+| `parallel` | Concurrent multi-slot inference test |
+| `backpressure` | Sends 2N requests to N slots — verifies all complete under oversubscription |
 
 ### Model Requirements
 
 - **Format**: GGUF models (e.g., `model.gguf`)
-- **Quantization**: Q4_0, Q4_1, Q5_0, Q5_1, Q8_0 supported
+- **Quantization**: Q4_0, Q4_1, Q5_0, Q5_1, Q8_0, and other GGUF quantizations supported
 - **Sources**: [Hugging Face](https://huggingface.co/models?search=gguf)
+
+## API Documentation
+
+The server exposes two equivalent interfaces. Both share the same inference engine and model state.
+
+### gRPC API
+
+Defined in [`api/proto/llmserver.proto`](api/proto/llmserver.proto).
+
+| RPC | Description |
+|-----|-------------|
+| `Ping` | Health check |
+| `LoadModel` | Load a GGUF model with streaming progress |
+| `Predict` | Generate text with streaming token output |
+
+### HTTP+SSE API
+
+Defined in [`api/http/openapi.yaml`](api/http/openapi.yaml) (OpenAPI 3.1).
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | `GET` | Health check |
+| `/models/load` | `POST` | Load a GGUF model — returns SSE progress stream |
+| `/completions` | `POST` | Generate text — streaming (SSE) or non-streaming JSON |
 
 ## Docker
 
@@ -271,7 +334,6 @@ make docker-integration-test-ci
 # Using scripts directly
 ./scripts/integration-test.sh --model /path/to/model.gguf
 ./scripts/integration-test.sh --ci
-./scripts/integration-test.sh --model-url https://example.com/model.gguf
 
 # Windows PowerShell
 .\scripts\integration-test.ps1 -Model C:\path\to\model.gguf
@@ -293,8 +355,8 @@ make docker-integration-test-ci
 ### Running Server Standalone
 
 ```bash
-# Run server container with mounted model
-docker run -p 50051:50051 \
+# Run server container (exposes gRPC on 50051, HTTP on 8080)
+docker run -p 50051:50051 -p 8080:8080 \
   -v /path/to/model.gguf:/models/model.gguf:ro \
   llamacpp-server
 
@@ -304,15 +366,14 @@ MODEL_PATH=/path/to/model.gguf docker compose -f docker/docker-compose.yml up se
 
 ### Using in Other Projects
 
-The llamacpp server Docker image can be used as a dependency in other projects:
-
 ```yaml
 # In your project's docker-compose.yml
 services:
   llm-server:
     image: llamacpp-server:latest
     ports:
-      - "50051:50051"
+      - "50051:50051"   # gRPC
+      - "8080:8080"     # HTTP+SSE
     volumes:
       - ${MODEL_PATH}:/models/model.gguf:ro
 
@@ -323,36 +384,12 @@ services:
         condition: service_healthy
     environment:
       - LLM_SERVER_HOST=llm-server
-      - LLM_SERVER_PORT=50051
+      - LLM_SERVER_GRPC_PORT=50051
+      - LLM_SERVER_HTTP_PORT=8080
 ```
 
-## API Documentation
-
-The llamacpp server implements the gRPC interface defined in `api/proto/llmserver.proto`:
-
-### LoadModel
-
-Loads a model from the specified path with progress updates.
-
-```protobuf
-rpc LoadModel(LoadModelRequest) returns (stream LoadModelResponse);
-```
-
-### Predict
-
-Generates text based on input prompt with streaming support.
-
-```protobuf
-rpc Predict(PredictRequest) returns (stream PredictResponse);
-```
-
-### Ping
-
-Health check endpoint.
-
-```protobuf
-rpc Ping(PingRequest) returns (PingResponse);
-```
+> **Note:** Docker images use ports 50051 (gRPC) and 8080 (HTTP) by default,
+> while native builds default to 50052 and 8082.
 
 ## Build Details
 
@@ -382,14 +419,14 @@ This ensures Docker builds are identical to local builds.
 #### Windows
 
 - **CUDA Support**: Automatically detected if `nvcc` is in PATH
-- **Import Libraries**: Required for linking - generated automatically by `make prepare`
+- **Import Libraries**: Required for linking — generated automatically by `make prepare`
 - **Runtime DLLs**: Automatically copied to executable directories by run targets
 
 #### macOS
 
 - **Apple Silicon (M1/M2/M3/M4)**: Metal backend enabled automatically
 - **Intel Macs**: CPU-only by default
-- **libomp**: Required for OpenMP support - install with `brew install libomp`
+- **libomp**: Required for OpenMP support — install with `brew install libomp`
 
 #### Linux
 
@@ -402,21 +439,27 @@ This ensures Docker builds are identical to local builds.
 - **Architecture**: Linux x64 only (for now)
 - **Dependencies**: Only `libgomp1` and `ca-certificates` at runtime
 
+## Further Reading
+
+- [Parallelism Modes](docs/PARALLELISM.md) — thread, pipeline, and tensor parallelism; comparison with vLLM, SGLang, TGI
+- [Continuous Batching](docs/CONTINUOUS_BATCHING.md) — shared-context architecture, benchmarks, and future work
+
 ## CI/CD
 
 The project includes GitHub Actions CI that runs on every push:
 
 1. **Build & Test**: Builds on Ubuntu, Windows, and macOS
-2. **Docker Integration Test**: Runs containerized integration tests
+2. **Docker Integration Test**: Runs gRPC, HTTP, and parallel inference tests
 3. **Artifacts**: Uploads built binaries for each platform
 
-See `.github/workflows/ci.yml` for details.
+See [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for details.
 
 ## License
 
 This project is licensed under the MIT License.
 
 ### Component Licenses
-- **LLaMA.cpp**: MIT License
+
+- **llama.cpp**: MIT License
 - **gRPC-Go**: Apache 2.0 License
 - **Protocol Buffers**: BSD 3-Clause License

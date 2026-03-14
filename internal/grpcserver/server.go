@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/hypernetix/llamacpp_server/api/proto"
-	"github.com/hypernetix/llamacpp_server/internal/inference"
+	"github.com/hypernetix/llamacpp_server/internal/inferenceengine"
 	"github.com/hypernetix/llamacpp_server/internal/llmservice"
 	"github.com/hypernetix/llamacpp_server/internal/logging"
 )
@@ -67,7 +67,7 @@ func (server *Server) Predict(predictRequest *proto.PredictRequest, stream proto
 	args := buildPredictArgs(predictRequest)
 	server.logSamplingBehavior(args)
 
-	var streamFunc inference.StreamFunc
+	var streamFunc inferenceengine.StreamFunc
 	if streamMode {
 		streamFunc = func(token, tokens int, message string) error {
 			msg := proto.PredictResponse{
@@ -101,7 +101,7 @@ func (server *Server) Predict(predictRequest *proto.PredictRequest, stream proto
 	return nil
 }
 
-func buildPredictArgs(req *proto.PredictRequest) inference.PredictArgs {
+func buildPredictArgs(req *proto.PredictRequest) inferenceengine.PredictArgs {
 	nPredict := int(req.MaxTokens)
 	if nPredict < 0 {
 		nPredict = 0
@@ -119,7 +119,7 @@ func buildPredictArgs(req *proto.PredictRequest) inference.PredictArgs {
 		topK = 0
 	}
 
-	args := inference.PredictArgs{
+	args := inferenceengine.PredictArgs{
 		NPredict:          nPredict,
 		Temp:              temp,
 		TopP:              topP,
@@ -243,7 +243,7 @@ func (server *Server) logPredictOptions(opts *proto.PredictRequest_Options) {
 	}
 }
 
-func (server *Server) logSamplingBehavior(args inference.PredictArgs) {
+func (server *Server) logSamplingBehavior(args inferenceengine.PredictArgs) {
 	if args.Temp == 0.0 || args.TopK == 1 {
 		server.logger.Infof("Predict: GREEDY SAMPLING (deterministic)")
 	} else {

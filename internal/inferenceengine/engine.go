@@ -1,13 +1,41 @@
-package engine
+package inferenceengine
 
 import (
 	"fmt"
 	"time"
 
 	llamacppbindings "github.com/hypernetix/llamacpp_server/internal/bindings"
-	"github.com/hypernetix/llamacpp_server/internal/inference"
 	"github.com/hypernetix/llamacpp_server/internal/logging"
 )
+
+// StreamFunc is a function type for streaming a prediction
+type StreamFunc func(token, tokens int, message string) error
+
+// PredictArgs are the arguments for a prediction
+type PredictArgs struct {
+	NPredict          int
+	Temp              float32
+	TopP              float32
+	TopK              int32
+	MinP              float32
+	MinTokensToKeep   int
+	MaxKvSize         int
+	PrefillStepSize   int
+	KvBits            int
+	KvGroupSize       int
+	QuantizedKvStart  int
+	RepetitionPenalty float32
+	LengthPenalty     float32
+	DiversityPenalty  float32
+	NoRepeatNgramSize int
+	RandomSeed        int
+}
+
+// PredictionsManager interface defines the operations for managing predictions
+type PredictionsManager interface {
+	Predict(model *llamacppbindings.Model, prompt string, args PredictArgs, stream StreamFunc) (string, error)
+	Stop()
+}
 
 // Options configures the continuous batching engine.
 type Options struct {
@@ -20,8 +48,7 @@ type Options struct {
 }
 
 // Engine implements continuous batching inference with a single shared
-// context and N concurrent slots. It satisfies inference.PredictionsManager
-// and can be used as a drop-in replacement for the separate-context manager.
+// context and N concurrent slots. It satisfies PredictionsManager.
 type Engine struct {
 	opts   Options
 	logger logging.SprintfLogger
@@ -39,7 +66,7 @@ type Engine struct {
 	done     chan struct{}
 }
 
-var _ inference.PredictionsManager = (*Engine)(nil)
+var _ PredictionsManager = (*Engine)(nil)
 
 // New creates and starts a continuous batching engine.
 // The engine goroutine runs until Stop is called.
@@ -70,8 +97,8 @@ func New(opts Options, logger logging.SprintfLogger) *Engine {
 func (e *Engine) Predict(
 	model *llamacppbindings.Model,
 	prompt string,
-	args inference.PredictArgs,
-	stream inference.StreamFunc,
+	args PredictArgs,
+	stream StreamFunc,
 ) (string, error) {
 	req := &request{
 		model:  model,

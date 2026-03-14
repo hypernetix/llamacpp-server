@@ -180,9 +180,9 @@ jobs:
         run: make run-inferencetest2 MODEL_PATH=models/${{ env.TEST_MODEL_NAME }}
         timeout-minutes: 5
       
-      # Step 14: Run llamacpp client test
-      - name: Run llamacpp client test
-        run: make run-llamacppclienttest MODEL_PATH=models/${{ env.TEST_MODEL_NAME }}
+      # Step 14: Run baseline inference test
+      - name: Run baseline inference test
+        run: make run-baselinetest MODEL_PATH=models/${{ env.TEST_MODEL_NAME }}
         timeout-minutes: 5
       
       # Step 15: Upload build artifacts

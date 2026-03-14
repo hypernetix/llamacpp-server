@@ -249,9 +249,23 @@ if [[ $HTTP_EXIT -ne 0 ]]; then
     exit $HTTP_EXIT
 fi
 
+# Run parallel inference test (multi-slot server)
+if [[ "$CI_MODE" == true ]]; then
+    PARALLEL_CLIENT_CONTAINER="llamacpp-client-grpc-cb-ci"
+else
+    PARALLEL_CLIENT_CONTAINER="llamacpp-client-grpc-cb"
+fi
+
+run_transport_test "Parallel" "client-grpc-cb" "$PARALLEL_CLIENT_CONTAINER"
+PARALLEL_EXIT=$?
+
+if [[ $PARALLEL_EXIT -ne 0 ]]; then
+    exit $PARALLEL_EXIT
+fi
+
 log_info ""
 log_info "========================================="
-log_info "  All transport tests PASSED"
+log_info "  All tests PASSED (gRPC, HTTP, Parallel)"
 log_info "========================================="
 
 exit 0

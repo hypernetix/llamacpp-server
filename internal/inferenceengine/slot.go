@@ -1,11 +1,10 @@
-package engine
+package inferenceengine
 
 import (
 	"strings"
 	"time"
 
 	llamacppbindings "github.com/hypernetix/llamacpp_server/internal/bindings"
-	"github.com/hypernetix/llamacpp_server/internal/inference"
 )
 
 type slotState int
@@ -51,7 +50,7 @@ type slot struct {
 	sampler      *llamacppbindings.Sampler
 
 	// request data
-	stream   inference.StreamFunc
+	stream   StreamFunc
 	resultCh chan requestResult
 	response strings.Builder
 
@@ -101,8 +100,8 @@ func (s *slot) finish(err error) {
 type request struct {
 	model  *llamacppbindings.Model
 	prompt string
-	args   inference.PredictArgs
-	stream inference.StreamFunc
+	args   PredictArgs
+	stream StreamFunc
 	done   chan requestResult
 }
 

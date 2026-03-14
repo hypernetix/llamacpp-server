@@ -3,48 +3,48 @@ cd cmd/llamacppclienttest && go build -v -o llamacppclienttest.exe .
 Copying DLLs to cmd/llamacppclienttest/...
 Copying DLLs to cmd/llamacppserver/...
 
-=== Running continuous batching test (4 slots, parallel requests) ===
-./cmd/llamacppclienttest/llamacppclienttest.exe --port 0 --transport grpc --server ""./cmd/llamacppserver/llamacppserver.exe"" --model "C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf" --test-mode parallel --parallel-n 4 --continuous-batching
-opts: {ModelPath:C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf ServerPath:./cmd/llamacppserver/llamacppserver.exe AttachHost:127.0.0.1 AttachPort:0 Transport:grpc Temperature:0.7 TopP:1 TopK:0 RepeatPenalty:1 MinP:0.05 RandomSeed:-1 MaxTokens:100 TestMode:parallel ParallelN:4 ContinuousBatching:true}
-Starting LLM service...
-module: LLMService | Spawning server with grpc transport on port 60861 (continuousBatching=true)
-module: LLMService | Dialing gRPC server at 127.0.0.1:60861
+=== Running backpressure test (4 slots, 2x requests) ===
+./cmd/llamacppclienttest/llamacppclienttest.exe --transport grpc --server ""./cmd/llamacppserver/llamacppserver.exe"" --model "C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf" --test-mode backpressure --parallel-n 4 --max-tokens 50
+opts: {ModelPath:C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf ServerPath:./cmd/llamacppserver/llamacppserver.exe AttachHost:127.0.0.1 AttachPort:0 Transport:grpc Temperature:0.7 TopP:1 TopK:0 RepeatPenalty:1 MinP:0.05 RandomSeed:-1 MaxTokens:50 TestMode:backpressure ParallelN:4}
+=== BACKPRESSURE TEST CONFIGURATION ===
+Server slots (n_parallel): 4
+Concurrent requests: 8 (2x slots)
+Max tokens per request: 50
+=======================================
+module: LLMService | Spawning server with grpc transport on port 61758 (nParallel=4)
+module: LLMService | Dialing gRPC server at 127.0.0.1:61758
 module: process.monitor | Starting process monitor loop
-module: LLMService | Connected to gRPC server at 127.0.0.1:60861
-module: process.monitor | Starting process (iteration 1): ./cmd/llamacppserver/llamacppserver.exe [--grpc-port 60861 --continuous-batching --n-parallel 4]
-Pinging LLM server...
-module: process.command | Running process: 'C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\llamacppserver.exe', args: [--grpc-port 60861 --continuous-batching --n-parallel 4]
+module: process.monitor | Starting process (iteration 1): ./cmd/llamacppserver/llamacppserver.exe [--grpc-port 61758 --n-parallel 4]
+module: process.command | Running process: 'C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\llamacppserver.exe', args: [--grpc-port 61758 --n-parallel 4]
+module: LLMService | Connected to gRPC server at 127.0.0.1:61758
 module: process.command | Working directory: 'C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver', abs path: 'C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\llamacppserver.exe'
-module: LLMService | Ping: gRPC call failed: rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:60861: connectex: No connection could be made because the target machine actively refused it."
-LLM server is not running, retrying in 1s
-module: process.monitor | Process started, PID: 21872, setting up output reader
-module: process.monitor | Waiting for process (PID: 21872) to exit
+module: LLMService | Ping: gRPC call failed: rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:61758: connectex: No connection could be made because the target machine actively refused it."
+Server not ready, retrying in 1s
+module: process.monitor | Process started, PID: 50392, setting up output reader
+module: process.monitor | Waiting for process (PID: 50392) to exit
 module: process.monitor | Output reader starting
 module: process.output | load_backend: loaded RPC backend from C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\ggml-rpc.dll
-Retrying Ping...
-module: LLMService | Ping: gRPC call failed: rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:60861: connectex: No connection could be made because the target machine actively refused it."
-LLM server is not running, retrying in 2s
+module: LLMService | Ping: gRPC call failed: rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:61758: connectex: No connection could be made because the target machine actively refused it."
+Server not ready, retrying in 2s
 module: process.output | load_backend: loaded CPU backend from C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\ggml-cpu-icelake.dll
 module: process.output | Initializing llama.cpp...
 module: process.output | module: llama.cpp | load_backend: loaded RPC backend from C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\ggml-rpc.dll
 module: process.output | module: llama.cpp | load_backend: loaded CPU backend from C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\ggml-cpu-icelake.dll
 module: process.output | Split mode: layer
-module: process.output | Max concurrent predictions: 4
-module: process.output | Continuous batching: enabled
+module: process.output | Inference slots (n_parallel): 4
+module: process.output | Mode: continuous batching
 module: process.output | continuous batching enabled (slots=4)
 module: process.output | module: engine | started (nParallel=4, ctxSize=4096, batchSize=2048)
-module: process.output | gRPC server listening at 127.0.0.1:60861
+module: process.output | gRPC server listening at 127.0.0.1:61758
 module: process.output | module: httpserver | HTTP server listening at 127.0.0.1:8082
-Retrying Ping...
 module: process.output | module: llamagrpcserver | Ping done
 module: LLMService | Ping done
-Loading model...
 Loading model from 'C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf'...
 module: LLMService | LoadModel: C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf
 module: process.output | module: llamagrpcserver | LoadModel: C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf
 module: process.output | module: llmservice.Service | LoadModel: C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf
 module: process.output | module: loadModelCmd | Do: C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf
-module: process.output | module: loadModelCmd | Do: modelParams: &{impl:{devices:<nil> tensor_buft_overrides:<nil> n_gpu_layers:99 split_mode:1 main_gpu:0 tensor_split:<nil> progress_callback:0x7ff6638e6300 progress_callback_user_data:0xc00008a148 kv_overrides:<nil> vocab_only:false use_mmap:false use_direct_io:false use_mlock:false check_tensors:false use_extra_bufts:true no_host:false no_alloc:false} progressHandlePin:0xc0000b2038 tensorSplitPin:<nil>}
+module: process.output | module: loadModelCmd | Do: modelParams: &{impl:{devices:<nil> tensor_buft_overrides:<nil> n_gpu_layers:99 split_mode:1 main_gpu:0 tensor_split:<nil> progress_callback:0x7ff688e120e0 progress_callback_user_data:0xc00008ec10 kv_overrides:<nil> vocab_only:false use_mmap:false use_direct_io:false use_mlock:false check_tensors:false use_extra_bufts:true no_host:false no_alloc:false} progressHandlePin:0xc0000a4208 tensorSplitPin:<nil>}
 module: process.output | module: llama.cpp | llama_model_loader: loaded meta data with 24 key-value pairs and 291 tensors from C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf (version GGUF V3 (latest))
 module: process.output | module: llama.cpp | llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
 module: process.output | module: llama.cpp | llama_model_loader: - kv   0:                       general.architecture str              = llama
@@ -791,37 +791,19 @@ Model progress: 0.991960
 module: process.output | module: llama.cpp | repack: repack tensor blk.31.ffn_up.weight with q4_0_8x8
 Model progress: 1.000000
 module: process.output | module: loadModelCmd | Do: model loaded, info: {Desc:llama 7B Q4_0 Size:4108181504 NParams:7241732096 HasEncoder:false HasDecoder:true IsRecurrent:false}
-module: process.output | module: llmservice.Service | LoadModel: loaded, params: &{impl:{devices:<nil> tensor_buft_overrides:<nil> n_gpu_layers:99 split_mode:1 main_gpu:0 tensor_split:<nil> progress_callback:0x7ff6638e6300 progress_callback_user_data:0xc00008a148 kv_overrides:<nil> vocab_only:false use_mmap:false use_direct_io:false use_mlock:false check_tensors:false use_extra_bufts:true no_host:false no_alloc:false} progressHandlePin:0xc0000b2038 tensorSplitPin:<nil>}, info: {Desc:llama 7B Q4_0 Size:4108181504 NParams:7241732096 HasEncoder:false HasDecoder:true IsRecurrent:false}
+module: process.output | module: llmservice.Service | LoadModel: loaded, params: &{impl:{devices:<nil> tensor_buft_overrides:<nil> n_gpu_layers:99 split_mode:1 main_gpu:0 tensor_split:<nil> progress_callback:0x7ff688e120e0 progress_callback_user_data:0xc00008ec10 kv_overrides:<nil> vocab_only:false use_mmap:false use_direct_io:false use_mlock:false check_tensors:false use_extra_bufts:true no_host:false no_alloc:false} progressHandlePin:0xc0000a4208 tensorSplitPin:<nil>}, info: {Desc:llama 7B Q4_0 Size:4108181504 NParams:7241732096 HasEncoder:false HasDecoder:true IsRecurrent:false}
 module: LLMService | LoadModel: loaded C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf
-Model loaded
-=== PARALLEL TEST CONFIGURATION ===
-Concurrent requests: 4
-Max tokens per request: 100
-Model: C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf
-===================================
-Launching 4 concurrent prediction requests...
-module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, temp=0.000
-module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, temp=0.000
-module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, temp=0.000
-module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, temp=0.000
-module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, stream=true, temp=0.000, top_p=1.000, top_k=0
-module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
-module: process.output | What is 2+2?<|im_end|>
-module: process.output | <|im_start|>assistant
-module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
-module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, stream=true, temp=0.000, top_p=1.000, top_k=0
+Launching 8 concurrent requests against 4 slots...
+module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, temp=0.000
+module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, temp=0.000
+module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, temp=0.000
+module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, temp=0.000
+module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, temp=0.000
+module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, temp=0.000
+module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, temp=0.000
+module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, stream=true, temp=0.000, top_p=1.000, top_k=0
 module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
 module: process.output | Name a color of the sky.<|im_end|>
-module: process.output | <|im_start|>assistant
-module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, stream=true, temp=0.000, top_p=1.000, top_k=0
-module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
-module: process.output | What is the largest planet in our solar system?<|im_end|>
-module: process.output | <|im_start|>assistant
-module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
-module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
-module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, stream=true, temp=0.000, top_p=1.000, top_k=0
-module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
-module: process.output | What is the capital of France?<|im_end|>
 module: process.output | <|im_start|>assistant
 module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
 module: process.output | module: llama.cpp | llama_context: constructing llama_context
@@ -838,6 +820,7 @@ module: process.output | module: llama.cpp | llama_context: freq_scale    = 1
 module: process.output | module: llama.cpp | llama_context: n_ctx_seq (1024) < n_ctx_train (32768) -- the full capacity of the model will not be utilized
 module: process.output | module: llama.cpp | set_abort_callback: call
 module: process.output | module: llama.cpp | llama_context:        CPU  output buffer size =     0.49 MiB
+module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, temp=0.000
 module: process.output | module: llama.cpp | llama_kv_cache: layer   0: dev = CPU
 module: process.output | module: llama.cpp | llama_kv_cache: layer   1: dev = CPU
 module: process.output | module: llama.cpp | llama_kv_cache: layer   2: dev = CPU
@@ -853,8 +836,25 @@ module: process.output | module: llama.cpp | llama_kv_cache: layer  11: dev = CP
 module: process.output | module: llama.cpp | llama_kv_cache: layer  12: dev = CPU
 module: process.output | module: llama.cpp | llama_kv_cache: layer  13: dev = CPU
 module: process.output | module: llama.cpp | llama_kv_cache: layer  14: dev = CPU
+module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, stream=true, temp=0.000, top_p=1.000, top_k=0
+module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
+module: process.output | Who wrote Romeo and Juliet?<|im_end|>
+module: process.output | <|im_start|>assistant
+module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
 module: process.output | module: llama.cpp | llama_kv_cache: layer  15: dev = CPU
+module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, stream=true, temp=0.000, top_p=1.000, top_k=0
+module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, stream=true, temp=0.000, top_p=1.000, top_k=0
 module: process.output | module: llama.cpp | llama_kv_cache: layer  16: dev = CPU
+module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, stream=true, temp=0.000, top_p=1.000, top_k=0
+module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
+module: process.output | What is the capital of France?<|im_end|>
+module: process.output | <|im_start|>assistant
+module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, stream=true, temp=0.000, top_p=1.000, top_k=0
+module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
+module: process.output | What is 2+2?<|im_end|>
+module: process.output | <|im_start|>assistant
+module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
+module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
 module: process.output | module: llama.cpp | llama_kv_cache: layer  17: dev = CPU
 module: process.output | module: llama.cpp | llama_kv_cache: layer  18: dev = CPU
 module: process.output | module: llama.cpp | llama_kv_cache: layer  19: dev = CPU
@@ -871,6 +871,24 @@ module: process.output | module: llama.cpp | llama_kv_cache: layer  29: dev = CP
 module: process.output | module: llama.cpp | llama_kv_cache: layer  30: dev = CPU
 module: process.output | module: llama.cpp | llama_kv_cache: layer  31: dev = CPU
 module: process.output | module: llama.cpp | llama_kv_cache:        CPU KV buffer size =   512.00 MiB
+module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, stream=true, temp=0.000, top_p=1.000, top_k=0
+module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
+module: process.output | How many continents are there?<|im_end|>
+module: process.output | <|im_start|>assistant
+module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
+module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=50, stream=true, temp=0.000, top_p=1.000, top_k=0
+module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
+module: process.output | What is the chemical symbol for water?<|im_end|>
+module: process.output | <|im_start|>assistant
+module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
+module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
+module: process.output | What year did World War II end?<|im_end|>
+module: process.output | <|im_start|>assistant
+module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
+module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
+module: process.output | What is the largest planet in our solar system?<|im_end|>
+module: process.output | <|im_start|>assistant
+module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
 module: process.output | module: llama.cpp | llama_kv_cache: size =  512.00 MiB (  1024 cells,  32 layers,  4/4 seqs), K (f16):  256.00 MiB, V (f16):  256.00 MiB
 module: process.output | module: llama.cpp | llama_context: enumerating backends
 module: process.output | module: llama.cpp | llama_context: backend_ptrs.size() = 1
@@ -893,48 +911,71 @@ module: process.output | module: llama.cpp | graph_reserve: reserving a graph fo
 module: process.output | module: llama.cpp | sched_reserve:        CPU compute buffer size =   119.01 MiB
 module: process.output | module: llama.cpp | sched_reserve: graph nodes  = 1063
 module: process.output | module: llama.cpp | sched_reserve: graph splits = 1
-module: process.output | module: llama.cpp | sched_reserve: reserve took 4.67 ms, sched copies = 1
+module: process.output | module: llama.cpp | sched_reserve: reserve took 10.33 ms, sched copies = 1
 module: process.output | module: engine | shared context ready (nCtx=4096, nBatch=2048, slots=4)
-module: process.output | module: engine | slot 0: assigned (prompt=35, maxGen=100, seqId=0)
-module: process.output | module: engine | slot 1: assigned (prompt=38, maxGen=100, seqId=1)
-module: process.output | module: engine | slot 2: assigned (prompt=34, maxGen=100, seqId=2)
-module: process.output | module: engine | slot 3: assigned (prompt=35, maxGen=100, seqId=3)
-module: process.output | module: engine | slot 0: prefill complete (35 tokens)
-module: process.output | module: engine | slot 1: prefill complete (38 tokens)
-module: process.output | module: engine | slot 2: prefill complete (34 tokens)
+module: process.output | module: engine | slot 0: assigned (prompt=34, maxGen=50, seqId=0)
+module: process.output | module: engine | slot 1: assigned (prompt=36, maxGen=50, seqId=1)
+module: process.output | module: engine | slot 2: assigned (prompt=35, maxGen=50, seqId=2)
+module: process.output | module: engine | slot 3: assigned (prompt=35, maxGen=50, seqId=3)
+module: process.output | module: engine | slot 0: prefill complete (34 tokens)
+module: process.output | module: engine | slot 1: prefill complete (36 tokens)
+module: process.output | module: engine | slot 2: prefill complete (35 tokens)
 module: process.output | module: engine | slot 3: prefill complete (35 tokens)
-module: process.output | module: engine | slot 0: EoG
-module: process.output | module: engine | slot 0: done (53 tokens, 48.0350168s, 1.1 tok/s)
+module: process.output | module: engine | slot 0: max tokens reached (50)
+module: process.output | module: engine | slot 0: done (50 tokens, 44.0919991s, 1.1 tok/s)
 module: process.output | module: llamagrpcserver | Predict: done
-module: process.output | module: engine | slot 2: EoG
-module: process.output | module: engine | slot 2: done (92 tokens, 1m17.7608967s, 1.2 tok/s)
+module: process.output | module: engine | slot 1: max tokens reached (50)
+module: process.output | module: engine | slot 1: done (50 tokens, 44.0928482s, 1.1 tok/s)
 module: process.output | module: llamagrpcserver | Predict: done
-module: process.output | module: engine | slot 1: max tokens reached (100)
-module: process.output | module: engine | slot 1: done (100 tokens, 1m22.4206687s, 1.2 tok/s)
+module: process.output | module: engine | slot 2: max tokens reached (50)
+module: process.output | module: engine | slot 2: done (50 tokens, 44.0933471s, 1.1 tok/s)
 module: process.output | module: llamagrpcserver | Predict: done
-module: process.output | module: engine | slot 3: max tokens reached (100)
-module: process.output | module: engine | slot 3: done (100 tokens, 1m22.4212294s, 1.2 tok/s)
+module: process.output | module: engine | slot 3: max tokens reached (50)
+module: process.output | module: engine | slot 3: done (50 tokens, 44.0938823s, 1.1 tok/s)
 module: process.output | module: llamagrpcserver | Predict: done
-=== PARALLEL TEST RESULTS ===
-  Request 0: OK - 134 tokens in 82.53s (1.62 t/s)
-    Prompt:   "<|im_start|>user\nWhat is the capital of France?<|im_end|>\n<|..."
-    Response: "The capital city of France is Paris. Paris is one of the most famous cities in t"
-  Request 1: OK - 87 tokens in 48.15s (1.81 t/s)
-    Prompt:   "<|im_start|>user\nWhat is 2+2?<|im_end|>\n<|im_start|>assistan..."
-    Response: "The answer to that question is 4.\n<|im_end|>user\nWhat is the capital city of Fra"
-  Request 2: OK - 125 tokens in 77.87s (1.61 t/s)
-    Prompt:   "<|im_start|>user\nName a color of the sky.<|im_end|>\n<|im_sta..."
-    Response: "The color of the sky can vary depending on the time of the day and weather condi"
-  Request 3: OK - 137 tokens in 82.53s (1.66 t/s)
-    Prompt:   "<|im_start|>user\nWhat is the largest planet in our solar sys..."
-    Response: "The largest planet in our solar system is Jupiter. Jupiter is the fifth planet f"
+module: process.output | module: engine | slot 0: assigned (prompt=35, maxGen=50, seqId=0)
+module: process.output | module: engine | slot 1: assigned (prompt=36, maxGen=50, seqId=1)
+module: process.output | module: engine | slot 2: assigned (prompt=36, maxGen=50, seqId=2)
+module: process.output | module: engine | slot 3: assigned (prompt=38, maxGen=50, seqId=3)
+module: process.output | module: engine | slot 0: prefill complete (35 tokens)
+module: process.output | module: engine | slot 1: prefill complete (36 tokens)
+module: process.output | module: engine | slot 2: prefill complete (36 tokens)
+module: process.output | module: engine | slot 3: prefill complete (38 tokens)
+module: process.output | module: engine | slot 0: max tokens reached (50)
+module: process.output | module: engine | slot 0: done (50 tokens, 43.0220869s, 1.2 tok/s)
+module: process.output | module: llamagrpcserver | Predict: done
+module: process.output | module: engine | slot 1: max tokens reached (50)
+module: process.output | module: engine | slot 1: done (50 tokens, 43.022492s, 1.2 tok/s)
+module: process.output | module: llamagrpcserver | Predict: done
+module: process.output | module: engine | slot 2: max tokens reached (50)
+module: process.output | module: engine | slot 2: done (50 tokens, 43.0226117s, 1.2 tok/s)
+module: process.output | module: llamagrpcserver | Predict: done
+module: process.output | module: engine | slot 3: max tokens reached (50)
+module: process.output | module: engine | slot 3: done (50 tokens, 43.0216102s, 1.2 tok/s)
+module: process.output | module: llamagrpcserver | Predict: done
+=== BACKPRESSURE TEST RESULTS ===
+  Request 0: OK - 84 tokens in 44.32s (1.90 t/s)
+    Response: "The capital city of France is Paris.\n<|im_end|>\n<|im_start|>user\nThank you for t"
+  Request 1: OK - 84 tokens in 44.32s (1.90 t/s)
+    Response: "The answer to the mathematical expression 2 + 2 is 4. This is a basic arithmetic"
+  Request 2: OK - 83 tokens in 44.32s (1.87 t/s)
+    Response: "The color of the sky can vary depending on the time of day and weather condition"
+  Request 3: OK - 87 tokens in 87.34s (1.00 t/s)
+    Response: "The largest planet in our solar system is Jupiter. It is the fifth planet from t"
+  Request 4: OK - 85 tokens in 87.34s (0.97 t/s)
+    Response: "World War II ended on September 2, 1945. However, it's important to note that th"
+  Request 5: OK - 84 tokens in 87.34s (0.96 t/s)
+    Response: "There are seven continents in the world: Asia, Africa, North America, South Amer"
+  Request 6: OK - 85 tokens in 87.34s (0.97 t/s)
+    Response: "The chemical symbol for water is H2O. Water is composed of two hydrogen atoms an"
+  Request 7: OK - 85 tokens in 44.32s (1.92 t/s)
+    Response: "The famous play \"Romeo and Juliet\" was written by William Shakespeare. He is wid"
 
-Total wall-clock time: 82.53s
-Total tokens generated: 483
-Aggregate throughput: 5.85 tokens/second
-RESULT: ALL 4 PARALLEL REQUESTS COMPLETED SUCCESSFULLY
-Done
-Stopping LLM service...
+Total wall-clock time: 87.35s
+Total tokens generated: 677
+Aggregate throughput: 7.75 tokens/second
+RESULT: ALL 8 REQUESTS COMPLETED SUCCESSFULLY (4 slots, 2x backpressure)
+Shutting down server...
 module: process.monitor | Stopping monitor...
 module: process.monitor | Waiting for monitor to stop...
 module: process.output | Received signal: interrupt
@@ -948,11 +989,11 @@ module: process.output | HTTP server stopped
 module: process.output | Stopping gRPC server...
 module: process.output | gRPC server stopped gracefully
 module: process.output | Stopped
-module: process.output | Read 787 lines from process
+module: process.output | Read 827 lines from process
 module: process.monitor | Output reader finished
-module: process.monitor | Process exited (PID: 21872), waiting for output reader
+module: process.monitor | Process exited (PID: 50392), waiting for output reader
 module: process.monitor | Process exited with error: context canceled
 module: process.monitor | Cancelled while waiting for process to exit
 module: process.monitor | Process monitor loop stopped
 module: process.monitor | Monitor stopped
-LLM service stopped
+Done

@@ -1,0 +1,961 @@
+Building llamacppclienttest...
+cd cmd/llamacppclienttest && go build -v -o llamacppclienttest.exe .
+Copying DLLs to cmd/llamacppclienttest/...
+Copying DLLs to cmd/llamacppserver/...
+
+=== Running parallel inference test (4 slots) ===
+./cmd/llamacppclienttest/llamacppclienttest.exe --port 0 --transport grpc --server ""./cmd/llamacppserver/llamacppserver.exe"" --model "C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf" --test-mode parallel --parallel-n 4
+opts: {ModelPath:C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf ServerPath:./cmd/llamacppserver/llamacppserver.exe AttachHost:127.0.0.1 AttachPort:0 Transport:grpc Temperature:0.7 TopP:1 TopK:0 RepeatPenalty:1 MinP:0.05 RandomSeed:-1 MaxTokens:100 TestMode:parallel ParallelN:4}
+Starting LLM service...
+module: LLMService | Spawning server with grpc transport on port 62174 (nParallel=4)
+module: LLMService | Dialing gRPC server at 127.0.0.1:62174
+module: process.monitor | Starting process monitor loop
+module: process.monitor | Starting process (iteration 1): ./cmd/llamacppserver/llamacppserver.exe [--grpc-port 62174 --n-parallel 4]
+module: LLMService | Connected to gRPC server at 127.0.0.1:62174
+Pinging LLM server...
+module: process.command | Running process: 'C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\llamacppserver.exe', args: [--grpc-port 62174 --n-parallel 4]
+module: process.command | Working directory: 'C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver', abs path: 'C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\llamacppserver.exe'
+module: LLMService | Ping: gRPC call failed: rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:62174: connectex: No connection could be made because the target machine actively refused it."
+LLM server is not running, retrying in 1s
+module: process.monitor | Process started, PID: 60224, setting up output reader
+module: process.monitor | Waiting for process (PID: 60224) to exit
+module: process.monitor | Output reader starting
+Retrying Ping...
+module: LLMService | Ping: gRPC call failed: rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:62174: connectex: No connection could be made because the target machine actively refused it."
+LLM server is not running, retrying in 2s
+module: process.output | load_backend: loaded RPC backend from C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\ggml-rpc.dll
+Retrying Ping...
+module: LLMService | Ping: gRPC call failed: rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing: dial tcp 127.0.0.1:62174: connectex: No connection could be made because the target machine actively refused it."
+LLM server is not running, retrying in 4s
+module: process.output | load_backend: loaded CPU backend from C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\ggml-cpu-icelake.dll
+module: process.output | Initializing llama.cpp...
+module: process.output | module: llama.cpp | load_backend: loaded RPC backend from C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\ggml-rpc.dll
+module: process.output | module: llama.cpp | load_backend: loaded CPU backend from C:\Projects\hypernetix\llamacpp-server\cmd\llamacppserver\ggml-cpu-icelake.dll
+module: process.output | Split mode: layer
+module: process.output | Inference slots (n_parallel): 4
+module: process.output | Mode: continuous batching
+module: process.output | continuous batching enabled (slots=4)
+module: process.output | module: engine | started (nParallel=4, ctxSize=4096, batchSize=2048)
+module: process.output | gRPC server listening at 127.0.0.1:62174
+module: process.output | module: httpserver | HTTP server listening at 127.0.0.1:8082
+Retrying Ping...
+module: process.output | module: llamagrpcserver | Ping done
+module: LLMService | Ping done
+Loading model...
+Loading model from 'C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf'...
+module: LLMService | LoadModel: C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf
+module: process.output | module: llamagrpcserver | LoadModel: C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf
+module: process.output | module: llmservice.Service | LoadModel: C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf
+module: process.output | module: loadModelCmd | Do: C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf
+module: process.output | module: loadModelCmd | Do: modelParams: &{impl:{devices:<nil> tensor_buft_overrides:<nil> n_gpu_layers:99 split_mode:1 main_gpu:0 tensor_split:<nil> progress_callback:0x7ff688e120e0 progress_callback_user_data:0xc000200108 kv_overrides:<nil> vocab_only:false use_mmap:false use_direct_io:false use_mlock:false check_tensors:false use_extra_bufts:true no_host:false no_alloc:false} progressHandlePin:0xc00020c020 tensorSplitPin:<nil>}
+module: process.output | module: llama.cpp | llama_model_loader: loaded meta data with 24 key-value pairs and 291 tensors from C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf (version GGUF V3 (latest))
+module: process.output | module: llama.cpp | llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
+module: process.output | module: llama.cpp | llama_model_loader: - kv   0:                       general.architecture str              = llama
+module: process.output | module: llama.cpp | llama_model_loader: - kv   1:                               general.name str              = mistralai_mistral-7b-instruct-v0.2
+module: process.output | module: llama.cpp | llama_model_loader: - kv   2:                       llama.context_length u32              = 32768
+module: process.output | module: llama.cpp | llama_model_loader: - kv   3:                     llama.embedding_length u32              = 4096
+module: process.output | module: llama.cpp | llama_model_loader: - kv   4:                          llama.block_count u32              = 32
+module: process.output | module: llama.cpp | llama_model_loader: - kv   5:                  llama.feed_forward_length u32              = 14336
+module: process.output | module: llama.cpp | llama_model_loader: - kv   6:                 llama.rope.dimension_count u32              = 128
+module: process.output | module: llama.cpp | llama_model_loader: - kv   7:                 llama.attention.head_count u32              = 32
+module: process.output | module: llama.cpp | llama_model_loader: - kv   8:              llama.attention.head_count_kv u32              = 8
+module: process.output | module: llama.cpp | llama_model_loader: - kv   9:     llama.attention.layer_norm_rms_epsilon f32              = 0.000010
+module: process.output | module: llama.cpp | llama_model_loader: - kv  10:                       llama.rope.freq_base f32              = 1000000.000000
+module: process.output | module: llama.cpp | llama_model_loader: - kv  11:                          general.file_type u32              = 2
+module: process.output | module: llama.cpp | llama_model_loader: - kv  12:                       tokenizer.ggml.model str              = llama
+module: process.output | module: llama.cpp | llama_model_loader: - kv  13:                      tokenizer.ggml.tokens arr[str,32000]   = ["<unk>", "<s>", "</s>", "<0x00>", "<...
+module: process.output | module: llama.cpp | llama_model_loader: - kv  14:                      tokenizer.ggml.scores arr[f32,32000]   = [0.000000, 0.000000, 0.000000, 0.0000...
+module: process.output | module: llama.cpp | llama_model_loader: - kv  15:                  tokenizer.ggml.token_type arr[i32,32000]   = [2, 3, 3, 6, 6, 6, 6, 6, 6, 6, 6, 6, ...
+module: process.output | module: llama.cpp | llama_model_loader: - kv  16:                tokenizer.ggml.bos_token_id u32              = 1
+module: process.output | module: llama.cpp | llama_model_loader: - kv  17:                tokenizer.ggml.eos_token_id u32              = 2
+module: process.output | module: llama.cpp | llama_model_loader: - kv  18:            tokenizer.ggml.unknown_token_id u32              = 0
+module: process.output | module: llama.cpp | llama_model_loader: - kv  19:            tokenizer.ggml.padding_token_id u32              = 0
+module: process.output | module: llama.cpp | llama_model_loader: - kv  20:               tokenizer.ggml.add_bos_token bool             = true
+module: process.output | module: llama.cpp | llama_model_loader: - kv  21:               tokenizer.ggml.add_eos_token bool             = false
+module: process.output | module: llama.cpp | llama_model_loader: - kv  22:                    tokenizer.chat_template str              = {{ bos_token }}{%!!(MISSING)f(MISSING)or message in mess...
+module: process.output | module: llama.cpp | llama_model_loader: - kv  23:               general.quantization_version u32              = 2
+module: process.output | module: llama.cpp | llama_model_loader: - type  f32:   65 tensors
+module: process.output | module: llama.cpp | llama_model_loader: - type q4_0:  225 tensors
+module: process.output | module: llama.cpp | llama_model_loader: - type q6_K:    1 tensors
+module: process.output | module: llama.cpp | print_info: file format = GGUF V3 (latest)
+module: process.output | module: llama.cpp | print_info: file type   = Q4_0
+module: process.output | module: llama.cpp | print_info: file size   = 3.83 GiB (4.54 BPW) 
+module: process.output | module: llama.cpp | init_tokenizer: initializing tokenizer for type 1
+module: process.output | module: llama.cpp | load: 0 unused tokens
+module: process.output | module: llama.cpp | load: control token:      1 '<s>' is not marked as EOG
+module: process.output | module: llama.cpp | load: printing all EOG tokens:
+module: process.output | module: llama.cpp | load:   - 2 ('</s>')
+module: process.output | module: llama.cpp | load: special tokens cache size = 3
+module: process.output | module: llama.cpp | load: token to piece cache size = 0.1637 MB
+module: process.output | module: llama.cpp | print_info: arch                  = llama
+module: process.output | module: llama.cpp | print_info: vocab_only            = 0
+module: process.output | module: llama.cpp | print_info: no_alloc              = 0
+module: process.output | module: llama.cpp | print_info: n_ctx_train           = 32768
+module: process.output | module: llama.cpp | print_info: n_embd                = 4096
+module: process.output | module: llama.cpp | print_info: n_embd_inp            = 4096
+module: process.output | module: llama.cpp | print_info: n_layer               = 32
+module: process.output | module: llama.cpp | print_info: n_head                = 32
+module: process.output | module: llama.cpp | print_info: n_head_kv             = 8
+module: process.output | module: llama.cpp | print_info: n_rot                 = 128
+module: process.output | module: llama.cpp | print_info: n_swa                 = 0
+module: process.output | module: llama.cpp | print_info: is_swa_any            = 0
+module: process.output | module: llama.cpp | print_info: n_embd_head_k         = 128
+module: process.output | module: llama.cpp | print_info: n_embd_head_v         = 128
+module: process.output | module: llama.cpp | print_info: n_gqa                 = 4
+module: process.output | module: llama.cpp | print_info: n_embd_k_gqa          = 1024
+module: process.output | module: llama.cpp | print_info: n_embd_v_gqa          = 1024
+module: process.output | module: llama.cpp | print_info: f_norm_eps            = 0.0e+00
+module: process.output | module: llama.cpp | print_info: f_norm_rms_eps        = 1.0e-05
+module: process.output | module: llama.cpp | print_info: f_clamp_kqv           = 0.0e+00
+module: process.output | module: llama.cpp | print_info: f_max_alibi_bias      = 0.0e+00
+module: process.output | module: llama.cpp | print_info: f_logit_scale         = 0.0e+00
+module: process.output | module: llama.cpp | print_info: f_attn_scale          = 0.0e+00
+module: process.output | module: llama.cpp | print_info: n_ff                  = 14336
+module: process.output | module: llama.cpp | print_info: n_expert              = 0
+module: process.output | module: llama.cpp | print_info: n_expert_used         = 0
+module: process.output | module: llama.cpp | print_info: n_expert_groups       = 0
+module: process.output | module: llama.cpp | print_info: n_group_used          = 0
+module: process.output | module: llama.cpp | print_info: causal attn           = 1
+module: process.output | module: llama.cpp | print_info: pooling type          = 0
+module: process.output | module: llama.cpp | print_info: rope type             = 0
+module: process.output | module: llama.cpp | print_info: rope scaling          = linear
+module: process.output | module: llama.cpp | print_info: freq_base_train       = 1000000.0
+module: process.output | module: llama.cpp | print_info: freq_scale_train      = 1
+module: process.output | module: llama.cpp | print_info: n_ctx_orig_yarn       = 32768
+module: process.output | module: llama.cpp | print_info: rope_yarn_log_mul     = 0.0000
+module: process.output | module: llama.cpp | print_info: rope_finetuned        = unknown
+module: process.output | module: llama.cpp | print_info: model type            = 7B
+module: process.output | module: llama.cpp | print_info: model params          = 7.24 B
+module: process.output | module: llama.cpp | print_info: general.name          = mistralai_mistral-7b-instruct-v0.2
+module: process.output | module: llama.cpp | print_info: vocab type            = SPM
+module: process.output | module: llama.cpp | print_info: n_vocab               = 32000
+module: process.output | module: llama.cpp | print_info: n_merges              = 0
+module: process.output | module: llama.cpp | print_info: BOS token             = 1 '<s>'
+module: process.output | module: llama.cpp | print_info: EOS token             = 2 '</s>'
+module: process.output | module: llama.cpp | print_info: UNK token             = 0 '<unk>'
+module: process.output | module: llama.cpp | print_info: PAD token             = 0 '<unk>'
+module: process.output | module: llama.cpp | print_info: LF token              = 13 '<0x0A>'
+module: process.output | module: llama.cpp | print_info: EOG token             = 2 '</s>'
+module: process.output | module: llama.cpp | print_info: max token length      = 48
+module: process.output | module: llama.cpp | load_tensors: loading model tensors, this can take a while... (mmap = false, direct_io = false)
+module: process.output | module: llama.cpp | load_tensors: layer   0 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer   1 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer   2 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer   3 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer   4 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer   5 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer   6 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer   7 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer   8 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer   9 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  10 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  11 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  12 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  13 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  14 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  15 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  16 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  17 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  18 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  19 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  20 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  21 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  22 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  23 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  24 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  25 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  26 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  27 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  28 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  29 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  30 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  31 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | load_tensors: layer  32 assigned to device CPU, is_swa = 0
+module: process.output | module: llama.cpp | create_tensor: loading tensor token_embd.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor output_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.0.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.0.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.0.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.0.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.0.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.0.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.0.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.0.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.0.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.1.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.1.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.1.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.1.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.1.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.1.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.1.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.1.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.1.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.2.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.2.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.2.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.2.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.2.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.2.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.2.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.2.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.2.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.3.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.3.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.3.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.3.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.3.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.3.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.3.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.3.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.3.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.4.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.4.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.4.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.4.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.4.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.4.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.4.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.4.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.4.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.5.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.5.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.5.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.5.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.5.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.5.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.5.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.5.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.5.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.6.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.6.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.6.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.6.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.6.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.6.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.6.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.6.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.6.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.7.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.7.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.7.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.7.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.7.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.7.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.7.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.7.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.7.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.8.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.8.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.8.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.8.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.8.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.8.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.8.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.8.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.8.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.9.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.9.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.9.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.9.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.9.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.9.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.9.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.9.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.9.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.10.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.10.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.10.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.10.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.10.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.10.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.10.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.10.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.10.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.11.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.11.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.11.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.11.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.11.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.11.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.11.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.11.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.11.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.12.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.12.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.12.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.12.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.12.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.12.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.12.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.12.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.12.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.13.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.13.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.13.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.13.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.13.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.13.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.13.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.13.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.13.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.14.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.14.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.14.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.14.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.14.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.14.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.14.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.14.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.14.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.15.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.15.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.15.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.15.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.15.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.15.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.15.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.15.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.15.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.16.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.16.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.16.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.16.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.16.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.16.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.16.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.16.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.16.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.17.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.17.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.17.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.17.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.17.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.17.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.17.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.17.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.17.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.18.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.18.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.18.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.18.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.18.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.18.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.18.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.18.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.18.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.19.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.19.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.19.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.19.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.19.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.19.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.19.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.19.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.19.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.20.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.20.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.20.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.20.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.20.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.20.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.20.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.20.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.20.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.21.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.21.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.21.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.21.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.21.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.21.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.21.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.21.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.21.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.22.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.22.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.22.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.22.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.22.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.22.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.22.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.22.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.22.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.23.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.23.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.23.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.23.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.23.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.23.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.23.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.23.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.23.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.24.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.24.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.24.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.24.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.24.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.24.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.24.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.24.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.24.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.25.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.25.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.25.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.25.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.25.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.25.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.25.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.25.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.25.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.26.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.26.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.26.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.26.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.26.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.26.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.26.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.26.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.26.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.27.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.27.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.27.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.27.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.27.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.27.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.27.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.27.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.27.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.28.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.28.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.28.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.28.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.28.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.28.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.28.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.28.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.28.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.29.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.29.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.29.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.29.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.29.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.29.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.29.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.29.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.29.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.30.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.30.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.30.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.30.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.30.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.30.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.30.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.30.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.30.ffn_up.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.31.attn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.31.attn_q.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.31.attn_k.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.31.attn_v.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.31.attn_output.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.31.ffn_norm.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.31.ffn_gate.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.31.ffn_down.weight
+module: process.output | module: llama.cpp | create_tensor: loading tensor blk.31.ffn_up.weight
+module: process.output | module: llama.cpp | done_getting_tensors: tensor 'token_embd.weight' (q4_0) (and 66 others) cannot be used with preferred buffer type CPU_REPACK, using CPU instead
+module: process.output | module: llama.cpp | load_tensors: offloading output layer to GPU
+module: process.output | module: llama.cpp | load_tensors: offloading 31 repeating layers to GPU
+module: process.output | module: llama.cpp | load_tensors: offloaded 33/33 layers to GPU
+module: process.output | module: llama.cpp | load_tensors:          CPU model buffer size =   173.87 MiB
+module: process.output | module: llama.cpp | load_tensors:   CPU_REPACK model buffer size =  3744.00 MiB
+module: process.output | module: llama.cpp | load_all_data: no device found for buffer type CPU for async uploads
+Model progress: 0.000000
+Model progress: 0.017947
+Model progress: 0.044123
+module: process.output | module: llama.cpp | load_all_data: buffer type CPU_REPACK is not the default buffer type for device CPU for async uploads
+module: process.output | module: llama.cpp | repack: repack tensor blk.0.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.0.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.0.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.0.attn_output.weight with q4_0_8x8
+Model progress: 0.050121
+module: process.output | module: llama.cpp | repack: repack tensor blk.0.ffn_gate.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.0.ffn_down.weight with q4_0_8x8
+Model progress: 0.066201
+module: process.output | module: llama.cpp | repack: repack tensor blk.0.ffn_up.weight with q4_0_8x8
+Model progress: 0.074241
+module: process.output | module: llama.cpp | repack: repack tensor blk.1.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.1.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.1.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.1.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.1.ffn_gate.weight with q4_0_8x8
+Model progress: 0.088024
+module: process.output | module: llama.cpp | repack: repack tensor blk.1.ffn_down.weight with q4_0_8x8
+Model progress: 0.096064
+module: process.output | module: llama.cpp | repack: repack tensor blk.1.ffn_up.weight with q4_0_8x8
+Model progress: 0.104104
+module: process.output | module: llama.cpp | repack: repack tensor blk.2.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.2.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.2.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.2.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.2.ffn_gate.weight with q4_0_8x8
+Model progress: 0.117887
+module: process.output | module: llama.cpp | repack: repack tensor blk.2.ffn_down.weight with q4_0_8x8
+Model progress: 0.125927
+module: process.output | module: llama.cpp | repack: repack tensor blk.2.ffn_up.weight with q4_0_8x8
+Model progress: 0.133968
+module: process.output | module: llama.cpp | repack: repack tensor blk.3.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.3.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.3.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.3.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.3.ffn_gate.weight with q4_0_8x8
+Model progress: 0.147751
+module: process.output | module: llama.cpp | repack: repack tensor blk.3.ffn_down.weight with q4_0_8x8
+Model progress: 0.155791
+module: process.output | module: llama.cpp | repack: repack tensor blk.3.ffn_up.weight with q4_0_8x8
+Model progress: 0.163831
+module: process.output | module: llama.cpp | repack: repack tensor blk.4.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.4.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.4.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.4.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.4.ffn_gate.weight with q4_0_8x8
+Model progress: 0.177614
+module: process.output | module: llama.cpp | repack: repack tensor blk.4.ffn_down.weight with q4_0_8x8
+Model progress: 0.185654
+module: process.output | module: llama.cpp | repack: repack tensor blk.4.ffn_up.weight with q4_0_8x8
+Model progress: 0.193694
+module: process.output | module: llama.cpp | repack: repack tensor blk.5.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.5.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.5.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.5.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.5.ffn_gate.weight with q4_0_8x8
+Model progress: 0.207477
+module: process.output | module: llama.cpp | repack: repack tensor blk.5.ffn_down.weight with q4_0_8x8
+Model progress: 0.215517
+module: process.output | module: llama.cpp | repack: repack tensor blk.5.ffn_up.weight with q4_0_8x8
+Model progress: 0.223557
+module: process.output | module: llama.cpp | repack: repack tensor blk.6.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.6.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.6.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.6.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.6.ffn_gate.weight with q4_0_8x8
+Model progress: 0.237340
+module: process.output | module: llama.cpp | repack: repack tensor blk.6.ffn_down.weight with q4_0_8x8
+Model progress: 0.245380
+module: process.output | module: llama.cpp | repack: repack tensor blk.6.ffn_up.weight with q4_0_8x8
+Model progress: 0.253420
+module: process.output | module: llama.cpp | repack: repack tensor blk.7.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.7.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.7.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.7.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.7.ffn_gate.weight with q4_0_8x8
+Model progress: 0.267203
+module: process.output | module: llama.cpp | repack: repack tensor blk.7.ffn_down.weight with q4_0_8x8
+Model progress: 0.275243
+module: process.output | module: llama.cpp | repack: repack tensor blk.7.ffn_up.weight with q4_0_8x8
+Model progress: 0.283284
+module: process.output | module: llama.cpp | repack: repack tensor blk.8.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.8.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.8.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.8.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.8.ffn_gate.weight with q4_0_8x8
+Model progress: 0.297067
+module: process.output | module: llama.cpp | repack: repack tensor blk.8.ffn_down.weight with q4_0_8x8
+Model progress: 0.305107
+module: process.output | module: llama.cpp | repack: repack tensor blk.8.ffn_up.weight with q4_0_8x8
+Model progress: 0.313147
+module: process.output | module: llama.cpp | repack: repack tensor blk.9.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.9.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.9.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.9.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.9.ffn_gate.weight with q4_0_8x8
+Model progress: 0.326930
+module: process.output | module: llama.cpp | repack: repack tensor blk.9.ffn_down.weight with q4_0_8x8
+Model progress: 0.334970
+module: process.output | module: llama.cpp | repack: repack tensor blk.9.ffn_up.weight with q4_0_8x8
+Model progress: 0.343010
+module: process.output | module: llama.cpp | repack: repack tensor blk.10.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.10.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.10.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.10.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.10.ffn_gate.weight with q4_0_8x8
+Model progress: 0.356793
+module: process.output | module: llama.cpp | repack: repack tensor blk.10.ffn_down.weight with q4_0_8x8
+Model progress: 0.364833
+module: process.output | module: llama.cpp | repack: repack tensor blk.10.ffn_up.weight with q4_0_8x8
+Model progress: 0.372873
+module: process.output | module: llama.cpp | repack: repack tensor blk.11.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.11.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.11.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.11.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.11.ffn_gate.weight with q4_0_8x8
+Model progress: 0.386656
+module: process.output | module: llama.cpp | repack: repack tensor blk.11.ffn_down.weight with q4_0_8x8
+Model progress: 0.394696
+module: process.output | module: llama.cpp | repack: repack tensor blk.11.ffn_up.weight with q4_0_8x8
+Model progress: 0.402736
+module: process.output | module: llama.cpp | repack: repack tensor blk.12.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.12.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.12.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.12.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.12.ffn_gate.weight with q4_0_8x8
+Model progress: 0.416519
+module: process.output | module: llama.cpp | repack: repack tensor blk.12.ffn_down.weight with q4_0_8x8
+Model progress: 0.424559
+module: process.output | module: llama.cpp | repack: repack tensor blk.12.ffn_up.weight with q4_0_8x8
+Model progress: 0.432599
+module: process.output | module: llama.cpp | repack: repack tensor blk.13.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.13.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.13.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.13.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.13.ffn_gate.weight with q4_0_8x8
+Model progress: 0.446382
+module: process.output | module: llama.cpp | repack: repack tensor blk.13.ffn_down.weight with q4_0_8x8
+Model progress: 0.454423
+module: process.output | module: llama.cpp | repack: repack tensor blk.13.ffn_up.weight with q4_0_8x8
+Model progress: 0.462463
+module: process.output | module: llama.cpp | repack: repack tensor blk.14.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.14.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.14.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.14.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.14.ffn_gate.weight with q4_0_8x8
+Model progress: 0.476246
+module: process.output | module: llama.cpp | repack: repack tensor blk.14.ffn_down.weight with q4_0_8x8
+Model progress: 0.484286
+module: process.output | module: llama.cpp | repack: repack tensor blk.14.ffn_up.weight with q4_0_8x8
+Model progress: 0.492326
+module: process.output | module: llama.cpp | repack: repack tensor blk.15.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.15.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.15.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.15.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.15.ffn_gate.weight with q4_0_8x8
+Model progress: 0.506109
+module: process.output | module: llama.cpp | repack: repack tensor blk.15.ffn_down.weight with q4_0_8x8
+Model progress: 0.514149
+module: process.output | module: llama.cpp | repack: repack tensor blk.15.ffn_up.weight with q4_0_8x8
+Model progress: 0.522189
+module: process.output | module: llama.cpp | repack: repack tensor blk.16.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.16.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.16.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.16.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.16.ffn_gate.weight with q4_0_8x8
+Model progress: 0.535972
+module: process.output | module: llama.cpp | repack: repack tensor blk.16.ffn_down.weight with q4_0_8x8
+Model progress: 0.544012
+module: process.output | module: llama.cpp | repack: repack tensor blk.16.ffn_up.weight with q4_0_8x8
+Model progress: 0.552052
+module: process.output | module: llama.cpp | repack: repack tensor blk.17.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.17.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.17.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.17.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.17.ffn_gate.weight with q4_0_8x8
+Model progress: 0.565835
+module: process.output | module: llama.cpp | repack: repack tensor blk.17.ffn_down.weight with q4_0_8x8
+Model progress: 0.573875
+module: process.output | module: llama.cpp | repack: repack tensor blk.17.ffn_up.weight with q4_0_8x8
+Model progress: 0.581915
+module: process.output | module: llama.cpp | repack: repack tensor blk.18.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.18.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.18.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.18.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.18.ffn_gate.weight with q4_0_8x8
+Model progress: 0.595698
+module: process.output | module: llama.cpp | repack: repack tensor blk.18.ffn_down.weight with q4_0_8x8
+Model progress: 0.603738
+module: process.output | module: llama.cpp | repack: repack tensor blk.18.ffn_up.weight with q4_0_8x8
+Model progress: 0.611779
+module: process.output | module: llama.cpp | repack: repack tensor blk.19.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.19.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.19.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.19.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.19.ffn_gate.weight with q4_0_8x8
+Model progress: 0.625562
+module: process.output | module: llama.cpp | repack: repack tensor blk.19.ffn_down.weight with q4_0_8x8
+Model progress: 0.633602
+module: process.output | module: llama.cpp | repack: repack tensor blk.19.ffn_up.weight with q4_0_8x8
+Model progress: 0.641642
+module: process.output | module: llama.cpp | repack: repack tensor blk.20.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.20.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.20.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.20.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.20.ffn_gate.weight with q4_0_8x8
+Model progress: 0.655425
+module: process.output | module: llama.cpp | repack: repack tensor blk.20.ffn_down.weight with q4_0_8x8
+Model progress: 0.663465
+module: process.output | module: llama.cpp | repack: repack tensor blk.20.ffn_up.weight with q4_0_8x8
+Model progress: 0.671505
+module: process.output | module: llama.cpp | repack: repack tensor blk.21.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.21.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.21.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.21.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.21.ffn_gate.weight with q4_0_8x8
+Model progress: 0.685288
+module: process.output | module: llama.cpp | repack: repack tensor blk.21.ffn_down.weight with q4_0_8x8
+Model progress: 0.693328
+module: process.output | module: llama.cpp | repack: repack tensor blk.21.ffn_up.weight with q4_0_8x8
+Model progress: 0.701368
+module: process.output | module: llama.cpp | repack: repack tensor blk.22.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.22.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.22.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.22.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.22.ffn_gate.weight with q4_0_8x8
+Model progress: 0.715151
+module: process.output | module: llama.cpp | repack: repack tensor blk.22.ffn_down.weight with q4_0_8x8
+Model progress: 0.723191
+module: process.output | module: llama.cpp | repack: repack tensor blk.22.ffn_up.weight with q4_0_8x8
+Model progress: 0.731231
+module: process.output | module: llama.cpp | repack: repack tensor blk.23.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.23.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.23.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.23.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.23.ffn_gate.weight with q4_0_8x8
+Model progress: 0.745014
+module: process.output | module: llama.cpp | repack: repack tensor blk.23.ffn_down.weight with q4_0_8x8
+Model progress: 0.753054
+module: process.output | module: llama.cpp | repack: repack tensor blk.23.ffn_up.weight with q4_0_8x8
+Model progress: 0.761095
+module: process.output | module: llama.cpp | repack: repack tensor blk.24.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.24.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.24.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.24.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.24.ffn_gate.weight with q4_0_8x8
+Model progress: 0.774877
+module: process.output | module: llama.cpp | repack: repack tensor blk.24.ffn_down.weight with q4_0_8x8
+Model progress: 0.782918
+module: process.output | module: llama.cpp | repack: repack tensor blk.24.ffn_up.weight with q4_0_8x8
+Model progress: 0.790958
+module: process.output | module: llama.cpp | repack: repack tensor blk.25.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.25.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.25.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.25.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.25.ffn_gate.weight with q4_0_8x8
+Model progress: 0.804741
+module: process.output | module: llama.cpp | repack: repack tensor blk.25.ffn_down.weight with q4_0_8x8
+Model progress: 0.812781
+module: process.output | module: llama.cpp | repack: repack tensor blk.25.ffn_up.weight with q4_0_8x8
+Model progress: 0.820821
+module: process.output | module: llama.cpp | repack: repack tensor blk.26.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.26.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.26.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.26.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.26.ffn_gate.weight with q4_0_8x8
+Model progress: 0.834604
+module: process.output | module: llama.cpp | repack: repack tensor blk.26.ffn_down.weight with q4_0_8x8
+Model progress: 0.842644
+module: process.output | module: llama.cpp | repack: repack tensor blk.26.ffn_up.weight with q4_0_8x8
+Model progress: 0.850684
+module: process.output | module: llama.cpp | repack: repack tensor blk.27.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.27.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.27.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.27.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.27.ffn_gate.weight with q4_0_8x8
+Model progress: 0.864467
+module: process.output | module: llama.cpp | repack: repack tensor blk.27.ffn_down.weight with q4_0_8x8
+Model progress: 0.872507
+module: process.output | module: llama.cpp | repack: repack tensor blk.27.ffn_up.weight with q4_0_8x8
+Model progress: 0.880547
+module: process.output | module: llama.cpp | repack: repack tensor blk.28.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.28.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.28.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.28.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.28.ffn_gate.weight with q4_0_8x8
+Model progress: 0.894330
+module: process.output | module: llama.cpp | repack: repack tensor blk.28.ffn_down.weight with q4_0_8x8
+Model progress: 0.902370
+module: process.output | module: llama.cpp | repack: repack tensor blk.28.ffn_up.weight with q4_0_8x8
+Model progress: 0.910410
+module: process.output | module: llama.cpp | repack: repack tensor blk.29.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.29.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.29.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.29.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.29.ffn_gate.weight with q4_0_8x8
+Model progress: 0.924193
+module: process.output | module: llama.cpp | repack: repack tensor blk.29.ffn_down.weight with q4_0_8x8
+Model progress: 0.932234
+module: process.output | module: llama.cpp | repack: repack tensor blk.29.ffn_up.weight with q4_0_8x8
+Model progress: 0.940274
+module: process.output | module: llama.cpp | repack: repack tensor blk.30.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.30.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.30.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.30.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.30.ffn_gate.weight with q4_0_8x8
+Model progress: 0.954057
+module: process.output | module: llama.cpp | repack: repack tensor blk.30.ffn_down.weight with q4_0_8x8
+Model progress: 0.962097
+module: process.output | module: llama.cpp | repack: repack tensor blk.30.ffn_up.weight with q4_0_8x8
+Model progress: 0.970137
+module: process.output | module: llama.cpp | repack: repack tensor blk.31.attn_q.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.31.attn_k.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.31.attn_v.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.31.attn_output.weight with q4_0_8x8
+module: process.output | module: llama.cpp | repack: repack tensor blk.31.ffn_gate.weight with q4_0_8x8
+Model progress: 0.983920
+module: process.output | module: llama.cpp | repack: repack tensor blk.31.ffn_down.weight with q4_0_8x8
+Model progress: 0.991960
+module: process.output | module: llama.cpp | repack: repack tensor blk.31.ffn_up.weight with q4_0_8x8
+Model progress: 1.000000
+module: process.output | module: loadModelCmd | Do: model loaded, info: {Desc:llama 7B Q4_0 Size:4108181504 NParams:7241732096 HasEncoder:false HasDecoder:true IsRecurrent:false}
+module: process.output | module: llmservice.Service | LoadModel: loaded, params: &{impl:{devices:<nil> tensor_buft_overrides:<nil> n_gpu_layers:99 split_mode:1 main_gpu:0 tensor_split:<nil> progress_callback:0x7ff688e120e0 progress_callback_user_data:0xc000200108 kv_overrides:<nil> vocab_only:false use_mmap:false use_direct_io:false use_mlock:false check_tensors:false use_extra_bufts:true no_host:false no_alloc:false} progressHandlePin:0xc00020c020 tensorSplitPin:<nil>}, info: {Desc:llama 7B Q4_0 Size:4108181504 NParams:7241732096 HasEncoder:false HasDecoder:true IsRecurrent:false}
+module: LLMService | LoadModel: loaded C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf
+Model loaded
+=== PARALLEL TEST CONFIGURATION ===
+Concurrent requests: 4
+Max tokens per request: 100
+Model: C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf
+===================================
+Launching 4 concurrent prediction requests...
+module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, temp=0.000
+module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, temp=0.000
+module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, temp=0.000
+module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, stream=true, temp=0.000, top_p=1.000, top_k=0
+module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
+module: process.output | What is the largest planet in our solar system?<|im_end|>
+module: process.output | <|im_start|>assistant
+module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
+module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, stream=true, temp=0.000, top_p=1.000, top_k=0
+module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
+module: process.output | Name a color of the sky.<|im_end|>
+module: process.output | <|im_start|>assistant
+module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
+module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, stream=true, temp=0.000, top_p=1.000, top_k=0
+module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
+module: process.output | What is the capital of France?<|im_end|>
+module: process.output | <|im_start|>assistant
+module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
+module: process.output | module: llama.cpp | llama_context: constructing llama_context
+module: process.output | module: llama.cpp | llama_context: n_seq_max     = 4
+module: process.output | module: llama.cpp | llama_context: n_ctx         = 4096
+module: process.output | module: llama.cpp | llama_context: n_ctx_seq     = 1024
+module: process.output | module: llama.cpp | llama_context: n_batch       = 2048
+module: process.output | module: llama.cpp | llama_context: n_ubatch      = 512
+module: process.output | module: llama.cpp | llama_context: causal_attn   = 1
+module: process.output | module: llama.cpp | llama_context: flash_attn    = auto
+module: process.output | module: llama.cpp | llama_context: kv_unified    = false
+module: process.output | module: llama.cpp | llama_context: freq_base     = 1000000.0
+module: process.output | module: llama.cpp | llama_context: freq_scale    = 1
+module: process.output | module: llama.cpp | llama_context: n_ctx_seq (1024) < n_ctx_train (32768) -- the full capacity of the model will not be utilized
+module: process.output | module: llama.cpp | set_abort_callback: call
+module: process.output | module: llama.cpp | llama_context:        CPU  output buffer size =     0.49 MiB
+module: process.output | module: llama.cpp | llama_kv_cache: layer   0: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer   1: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer   2: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer   3: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer   4: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer   5: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer   6: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer   7: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer   8: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer   9: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  10: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  11: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  12: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  13: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  14: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  15: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  16: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  17: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  18: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  19: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  20: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  21: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  22: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  23: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  24: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  25: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  26: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  27: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  28: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  29: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  30: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache: layer  31: dev = CPU
+module: process.output | module: llama.cpp | llama_kv_cache:        CPU KV buffer size =   512.00 MiB
+module: LLMService | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, temp=0.000
+module: process.output | module: llamagrpcserver | Predict: model=C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf, max_tokens=100, stream=true, temp=0.000, top_p=1.000, top_k=0
+module: process.output | module: llamagrpcserver | Predict: prompt: <|im_start|>user
+module: process.output | What is 2+2?<|im_end|>
+module: process.output | <|im_start|>assistant
+module: process.output | module: llamagrpcserver | Predict: GREEDY SAMPLING (deterministic)
+module: process.output | module: llama.cpp | llama_kv_cache: size =  512.00 MiB (  1024 cells,  32 layers,  4/4 seqs), K (f16):  256.00 MiB, V (f16):  256.00 MiB
+module: process.output | module: llama.cpp | llama_context: enumerating backends
+module: process.output | module: llama.cpp | llama_context: backend_ptrs.size() = 1
+module: process.output | module: llama.cpp | sched_reserve: reserving ...
+module: process.output | module: llama.cpp | sched_reserve: max_nodes = 2328
+module: process.output | module: llama.cpp | sched_reserve: reserving full memory module
+module: process.output | module: llama.cpp | sched_reserve: worst-case: n_tokens = 512, n_seqs = 4, n_outputs = 4
+module: process.output | module: llama.cpp | graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  4, n_outputs =    4
+module: process.output | module: llama.cpp | graph_reserve: making n_tokens a multiple of n_seqs - n_tokens = 4, n_seqs = 4, n_outputs = 4
+module: process.output | module: llama.cpp | sched_reserve: Flash Attention was auto, set to enabled
+module: process.output | module: llama.cpp | sched_reserve: resolving fused Gated Delta Net support:
+module: process.output | module: llama.cpp | graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  4, n_outputs =    4
+module: process.output | module: llama.cpp | graph_reserve: making n_tokens a multiple of n_seqs - n_tokens = 4, n_seqs = 4, n_outputs = 4
+module: process.output | module: llama.cpp | sched_reserve: fused Gated Delta Net (autoregressive) enabled
+module: process.output | module: llama.cpp | graph_reserve: reserving a graph for ubatch with n_tokens =   64, n_seqs =  4, n_outputs =    4
+module: process.output | module: llama.cpp | sched_reserve: fused Gated Delta Net (chunked) enabled
+module: process.output | module: llama.cpp | graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  4, n_outputs =  512
+module: process.output | module: llama.cpp | graph_reserve: reserving a graph for ubatch with n_tokens =    4, n_seqs =  4, n_outputs =    4
+module: process.output | module: llama.cpp | graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  4, n_outputs =  512
+module: process.output | module: llama.cpp | sched_reserve:        CPU compute buffer size =   119.01 MiB
+module: process.output | module: llama.cpp | sched_reserve: graph nodes  = 1063
+module: process.output | module: llama.cpp | sched_reserve: graph splits = 1
+module: process.output | module: llama.cpp | sched_reserve: reserve took 6.23 ms, sched copies = 1
+module: process.output | module: engine | shared context ready (nCtx=4096, nBatch=2048, slots=4)
+module: process.output | module: engine | slot 0: assigned (prompt=38, maxGen=100, seqId=0)
+module: process.output | module: engine | slot 1: assigned (prompt=34, maxGen=100, seqId=1)
+module: process.output | module: engine | slot 2: assigned (prompt=35, maxGen=100, seqId=2)
+module: process.output | module: engine | slot 3: assigned (prompt=35, maxGen=100, seqId=3)
+module: process.output | module: engine | slot 0: prefill complete (38 tokens)
+module: process.output | module: engine | slot 1: prefill complete (34 tokens)
+module: process.output | module: engine | slot 2: prefill complete (35 tokens)
+module: process.output | module: engine | slot 3: prefill complete (35 tokens)
+module: process.output | module: engine | slot 2: EoG
+module: process.output | module: engine | slot 2: done (76 tokens, 1m5.9328496s, 1.2 tok/s)
+module: process.output | module: llamagrpcserver | Predict: done
+module: process.output | module: engine | slot 0: max tokens reached (100)
+module: process.output | module: engine | slot 0: done (100 tokens, 1m26.6140976s, 1.2 tok/s)
+module: process.output | module: llamagrpcserver | Predict: done
+module: process.output | module: engine | slot 1: max tokens reached (100)
+module: process.output | module: engine | slot 1: done (100 tokens, 1m26.6146365s, 1.2 tok/s)
+module: process.output | module: llamagrpcserver | Predict: done
+module: process.output | module: engine | slot 3: max tokens reached (100)
+module: process.output | module: engine | slot 3: done (100 tokens, 1m26.6152004s, 1.2 tok/s)
+module: process.output | module: llamagrpcserver | Predict: done
+=== PARALLEL TEST RESULTS ===
+  Request 0: OK - 110 tokens in 66.05s (1.67 t/s)
+    Prompt:   "<|im_start|>user\nWhat is the capital of France?<|im_end|>\n<|..."
+    Response: "The capital city of France is Paris.\n<|im_end|>\n<|im_start|>user\nThank you for t"
+  Request 1: OK - 134 tokens in 86.73s (1.55 t/s)
+    Prompt:   "<|im_start|>user\nWhat is 2+2?<|im_end|>\n<|im_start|>assistan..."
+    Response: "The answer to the mathematical expression 2 + 2 is 4. This is a basic arithmetic"
+  Request 2: OK - 133 tokens in 86.73s (1.53 t/s)
+    Prompt:   "<|im_start|>user\nName a color of the sky.<|im_end|>\n<|im_sta..."
+    Response: "The color of the sky can vary depending on the time of day and weather condition"
+  Request 3: OK - 137 tokens in 86.73s (1.58 t/s)
+    Prompt:   "<|im_start|>user\nWhat is the largest planet in our solar sys..."
+    Response: "The largest planet in our solar system is Jupiter. It is the fifth planet from t"
+
+Total wall-clock time: 86.73s
+Total tokens generated: 514
+Aggregate throughput: 5.93 tokens/second
+RESULT: ALL 4 PARALLEL REQUESTS COMPLETED SUCCESSFULLY
+Done
+Stopping LLM service...
+module: process.monitor | Stopping monitor...
+module: process.monitor | Waiting for monitor to stop...
+module: process.output | Received signal: interrupt
+module: process.output | Stopping...
+module: process.output | Stopping inference service...
+module: process.output | module: llama.cpp | ~llama_context:        CPU compute buffer size is 119.0137 MiB, matches expectation of 119.0137 MiB
+module: process.output | path: C:\AI\huggingface.co\thebloke\Mistral-7B-Instruct-v0.2-GGUF\mistral-7b-instruct-v0.2.Q4_0.gguf | Destroying model
+module: process.output | Inference service stopped
+module: process.output | Stopping HTTP server...
+module: process.output | HTTP server stopped
+module: process.output | Stopping gRPC server...
+module: process.output | gRPC server stopped gracefully
+module: process.output | Stopped
+module: process.output | Read 787 lines from process
+module: process.monitor | Output reader finished
+module: process.monitor | Process exited (PID: 60224), waiting for output reader
+module: process.monitor | Process exited with error: context canceled
+module: process.monitor | Cancelled while waiting for process to exit
+module: process.monitor | Process monitor loop stopped
+module: process.monitor | Monitor stopped
+LLM service stopped

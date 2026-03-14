@@ -28,14 +28,24 @@ type flagOptions struct {
 	MinP           float64 `long:"min-p" description:"min-p sampling" default:"0.05"`
 	RandomSeed     int     `long:"seed" description:"random seed for reproducible results (-1 for random)" default:"-1"`
 	MaxTokens      int     `long:"max-tokens" description:"maximum tokens to generate" default:"100"`
-	TestMode           string `long:"test-mode" description:"test mode: baseline, greedy, seeded, stress, or parallel" default:"baseline"`
+	TestMode           string `long:"test-mode" description:"test mode: baseline, greedy, seeded, stress, parallel, or backpressure" default:"baseline"`
 	ParallelN          int    `long:"parallel-n" description:"number of concurrent requests for parallel test mode" default:"4"`
-	ContinuousBatching bool   `long:"continuous-batching" description:"tell the spawned server to use continuous batching mode"`
 }
 
 // Helper functions for pointer creation
 func Float64Ptr(f float64) *float64 { return &f }
 func IntPtr(i int) *int             { return &i }
+
+var testPrompts = []string{
+	"<|im_start|>user\nWhat is the capital of France?<|im_end|>\n<|im_start|>assistant\n",
+	"<|im_start|>user\nWhat is 2+2?<|im_end|>\n<|im_start|>assistant\n",
+	"<|im_start|>user\nName a color of the sky.<|im_end|>\n<|im_start|>assistant\n",
+	"<|im_start|>user\nWhat is the largest planet in our solar system?<|im_end|>\n<|im_start|>assistant\n",
+	"<|im_start|>user\nWhat year did World War II end?<|im_end|>\n<|im_start|>assistant\n",
+	"<|im_start|>user\nHow many continents are there?<|im_end|>\n<|im_start|>assistant\n",
+	"<|im_start|>user\nWhat is the chemical symbol for water?<|im_end|>\n<|im_start|>assistant\n",
+	"<|im_start|>user\nWho wrote Romeo and Juliet?<|im_end|>\n<|im_start|>assistant\n",
+}
 
 func main() {
 	var opts flagOptions
@@ -78,15 +88,25 @@ func main() {
 		modelPath = absPath
 	}
 
+	// Backpressure test mode manages its own server lifecycle
+	if opts.TestMode == "backpressure" {
+		if opts.ServerPath == "" {
+			fmt.Println("backpressure test mode requires --server (server binary path)")
+			os.Exit(1)
+		}
+		runBackpressureTest(modelPath, opts, logger)
+		logger.Infof("Done")
+		return
+	}
+
 	logger.Infof("Starting LLM service...")
 
 	llmServiceOptions := llmservice.LLMServiceOptions{
-		ServerPath:         opts.ServerPath,
-		AttachHost:         opts.AttachHost,
-		AttachPort:         opts.AttachPort,
-		Transport:          opts.Transport,
-		ContinuousBatching: opts.ContinuousBatching,
-		NParallel:          opts.ParallelN,
+		ServerPath: opts.ServerPath,
+		AttachHost: opts.AttachHost,
+		AttachPort: opts.AttachPort,
+		Transport:  opts.Transport,
+		NParallel:  opts.ParallelN,
 	}
 
 	llmService, err := llmservice.NewLlamacppLLMService(llmServiceOptions, logger)
@@ -345,16 +365,7 @@ func runParallelTest(ctx context.Context, llmService llmservice.LLMService, mode
 		nParallel = 2
 	}
 
-	prompts := []string{
-		"<|im_start|>user\nWhat is the capital of France?<|im_end|>\n<|im_start|>assistant\n",
-		"<|im_start|>user\nWhat is 2+2?<|im_end|>\n<|im_start|>assistant\n",
-		"<|im_start|>user\nName a color of the sky.<|im_end|>\n<|im_start|>assistant\n",
-		"<|im_start|>user\nWhat is the largest planet in our solar system?<|im_end|>\n<|im_start|>assistant\n",
-		"<|im_start|>user\nWhat year did World War II end?<|im_end|>\n<|im_start|>assistant\n",
-		"<|im_start|>user\nHow many continents are there?<|im_end|>\n<|im_start|>assistant\n",
-		"<|im_start|>user\nWhat is the chemical symbol for water?<|im_end|>\n<|im_start|>assistant\n",
-		"<|im_start|>user\nWho wrote Romeo and Juliet?<|im_end|>\n<|im_start|>assistant\n",
-	}
+	prompts := testPrompts
 
 	maxTokens := opts.MaxTokens
 	if maxTokens <= 0 {
@@ -458,6 +469,205 @@ func runParallelTest(ctx context.Context, llmService llmservice.LLMService, mode
 		logger.Infof("RESULT: ALL %d PARALLEL REQUESTS COMPLETED SUCCESSFULLY", nParallel)
 	} else {
 		logger.Errorf("RESULT: SOME PARALLEL REQUESTS FAILED")
+		os.Exit(1)
+	}
+}
+
+// =============================================================================
+// Helpers for compare / backpressure test modes
+// =============================================================================
+
+func pingWithRetry(ctx context.Context, svc llmservice.LLMService, logger logging.SprintfLogger) error {
+	retryAttempts := 10
+	retryInterval := 1 * time.Second
+	var err error
+	for retryAttempts > 0 {
+		err = svc.Ping(ctx)
+		if err == nil {
+			return nil
+		}
+		refusedError1 := "connectex: No connection could be made because the target machine actively refused it."
+		refusedError2 := "connect: connection refused"
+		if !strings.Contains(err.Error(), refusedError1) && !strings.Contains(err.Error(), refusedError2) {
+			return err
+		}
+		logger.Infof("Server not ready, retrying in %s", retryInterval)
+		time.Sleep(retryInterval)
+		retryInterval *= 2
+		retryAttempts--
+	}
+	return err
+}
+
+func loadModelHelper(ctx context.Context, svc llmservice.LLMService, modelPath string, logger logging.SprintfLogger) error {
+	progressChan := make(chan float32)
+	defer close(progressChan)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for progress := range progressChan {
+			fmt.Printf("Model progress: %f\n", progress)
+			if progress >= 1.0 {
+				break
+			}
+		}
+	}()
+	logger.Infof("Loading model from '%s'...", modelPath)
+	err := svc.LoadModel(ctx, modelPath, progressChan)
+	wg.Wait()
+	return err
+}
+
+func createAndPrepareService(ctx context.Context, opts flagOptions, modelPath string, nParallel int, logger logging.SprintfLogger) (llmservice.LLMService, error) {
+	svcOpts := llmservice.LLMServiceOptions{
+		ServerPath: opts.ServerPath,
+		AttachHost: opts.AttachHost,
+		Transport:  opts.Transport,
+		NParallel:  nParallel,
+	}
+	svc, err := llmservice.NewLlamacppLLMService(svcOpts, logger)
+	if err != nil {
+		return nil, fmt.Errorf("create service: %w", err)
+	}
+	if err := pingWithRetry(ctx, svc, logger); err != nil {
+		svc.Shutdown()
+		return nil, fmt.Errorf("ping: %w", err)
+	}
+	if err := loadModelHelper(ctx, svc, modelPath, logger); err != nil {
+		svc.Shutdown()
+		return nil, fmt.Errorf("load model: %w", err)
+	}
+	return svc, nil
+}
+
+func runGreedyRequest(ctx context.Context, svc llmservice.LLMService, modelPath string, prompt string, maxTokens int) parallelResult {
+	start := time.Now()
+	req := llmservice.PredictRequest{
+		ModelName:   modelPath,
+		Message:     prompt,
+		MaxTokens:   maxTokens,
+		Temperature: 0.0,
+		Stream:      true,
+	}
+	respChan := make(chan llmservice.PredictResponse, 128)
+	err := svc.Predict(ctx, req, respChan)
+	if err != nil {
+		return parallelResult{prompt: prompt, err: err, duration: time.Since(start)}
+	}
+	var fullResponse string
+	var tokenCount int
+	for resp := range respChan {
+		if resp.Error != nil {
+			return parallelResult{prompt: prompt, err: resp.Error, duration: time.Since(start)}
+		}
+		fullResponse += resp.Message
+		if resp.Tokens > 0 {
+			tokenCount = int(resp.Tokens)
+		}
+		if resp.Done {
+			break
+		}
+	}
+	return parallelResult{
+		prompt:   prompt,
+		response: fullResponse,
+		tokens:   tokenCount,
+		duration: time.Since(start),
+	}
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
+}
+
+// =============================================================================
+// Backpressure test: 2N requests with N slots, all must complete
+// =============================================================================
+
+func runBackpressureTest(modelPath string, opts flagOptions, logger logging.SprintfLogger) {
+	ctx := context.Background()
+	nSlots := opts.ParallelN
+	if nSlots < 2 {
+		nSlots = 2
+	}
+	nRequests := 2 * nSlots
+	maxTokens := opts.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = 50
+	}
+
+	logger.Infof("=== BACKPRESSURE TEST CONFIGURATION ===")
+	logger.Infof("Server slots (n_parallel): %d", nSlots)
+	logger.Infof("Concurrent requests: %d (2x slots)", nRequests)
+	logger.Infof("Max tokens per request: %d", maxTokens)
+	logger.Infof("=======================================")
+
+	svc, err := createAndPrepareService(ctx, opts, modelPath, nSlots, logger)
+	if err != nil {
+		logger.Errorf("Failed to create service: %v", err)
+		os.Exit(1)
+	}
+	defer func() {
+		logger.Infof("Shutting down server...")
+		svc.Shutdown()
+	}()
+
+	prompts := make([]string, nRequests)
+	for i := range prompts {
+		prompts[i] = testPrompts[i%len(testPrompts)]
+	}
+
+	results := make([]parallelResult, nRequests)
+	var wg sync.WaitGroup
+	startTime := time.Now()
+
+	logger.Infof("Launching %d concurrent requests against %d slots...", nRequests, nSlots)
+	for i := 0; i < nRequests; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			results[idx] = runGreedyRequest(ctx, svc, modelPath, prompts[idx], maxTokens)
+			results[idx].index = idx
+		}(i)
+	}
+	wg.Wait()
+	totalTime := time.Since(startTime)
+
+	logger.Infof("=== BACKPRESSURE TEST RESULTS ===")
+	allPassed := true
+	totalTokens := 0
+	for _, r := range results {
+		if r.err != nil {
+			logger.Errorf("  Request %d: FAILED - %v", r.index, r.err)
+			allPassed = false
+		} else {
+			throughput := float64(0)
+			if r.duration.Seconds() > 0 {
+				throughput = float64(r.tokens) / r.duration.Seconds()
+			}
+			logger.Infof("  Request %d: OK - %d tokens in %.2fs (%.2f t/s)",
+				r.index, r.tokens, r.duration.Seconds(), throughput)
+			logger.Infof("    Response: %q", truncate(r.response, 80))
+			totalTokens += r.tokens
+		}
+	}
+
+	logger.Infof("")
+	logger.Infof("Total wall-clock time: %.2fs", totalTime.Seconds())
+	logger.Infof("Total tokens generated: %d", totalTokens)
+	if totalTime.Seconds() > 0 {
+		logger.Infof("Aggregate throughput: %.2f tokens/second", float64(totalTokens)/totalTime.Seconds())
+	}
+
+	if allPassed {
+		logger.Infof("RESULT: ALL %d REQUESTS COMPLETED SUCCESSFULLY (%d slots, %dx backpressure)",
+			nRequests, nSlots, nRequests/nSlots)
+	} else {
+		logger.Errorf("RESULT: SOME REQUESTS FAILED")
 		os.Exit(1)
 	}
 }

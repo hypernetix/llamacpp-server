@@ -1,19 +1,19 @@
-# Inference Parallelism in llama.cpp
+# Inference Parallelism in llamacpp-server
 
-This document describes the parallelism features available in llama.cpp and how they
-are exposed in the llamacpp-server.
+This document describes the parallelism features available in llamacpp-server and how
+they compare to other LLM inference solutions.
 
-## Overview of Parallelism Types
+## Overview
 
-llama.cpp supports several forms of parallelism. They operate at different levels and
-can be combined:
+llamacpp-server supports several forms of parallelism. They operate at different levels
+and can be combined:
 
 | Type | Level | Purpose | Hardware Requirement |
 |------|-------|---------|---------------------|
 | Thread parallelism | Intra-operator | Speed up a single matrix operation | Multi-core CPU |
 | Pipeline parallelism (PP) | Inter-device | Split model layers across GPUs | Multi-GPU |
 | Tensor parallelism (TP) | Inter-device | Split tensors across GPUs | Multi-GPU (same VRAM) |
-| Continuous batching | Request-level | Process multiple requests concurrently | Any |
+| Continuous batching | Request-level | Process multiple requests in one forward pass | Any |
 | Flash attention | Intra-operator | Fused attention kernel | Any (best on GPU) |
 
 ## Thread Parallelism
@@ -139,41 +139,49 @@ As of llama.cpp b8323:
 | MoE models | PP only |
 | Single GPU | `--split-mode none` |
 
-## Concurrent Request Handling (Slots)
+## Continuous Batching
 
-llamacpp-server supports handling multiple concurrent inference requests. Each request
-gets its own llama.cpp context (with independent KV cache), while the loaded model is
-shared read-only across all contexts.
+Continuous batching (also called dynamic batching) processes multiple concurrent
+requests within a **single** llama.cpp context and forward pass. All requests share
+one KV cache, with each request isolated by a unique sequence ID. A central scheduler
+combines tokens from all active requests into a single `llama_decode` call per tick.
 
-### How it works
+This is the same approach used by llama.cpp's own HTTP server and by production
+inference engines like vLLM and SGLang.
 
-1. A gRPC `Predict` request arrives.
-2. The predictions manager checks the concurrency limit.
-3. If a slot is available, a new llama.cpp context is created for this request.
-4. The prediction runs independently of other in-flight predictions.
-5. On completion, the context is freed and the slot is released.
+### Benefits
+
+- **Higher throughput** — one batched forward pass instead of N separate ones.
+  GPU utilization scales with concurrency instead of being capped at 1/N.
+- **Lower memory usage** — one shared KV cache instead of N independent caches.
+  The scheduler right-sizes the cache and reuses freed slots.
+- **Chunked prefill** — long prompts are split into chunks and interleaved with
+  decode tokens from other requests, preventing latency spikes.
+- **2x wall-clock speedup** measured on CPU with 4 concurrent requests
+  (see [CONTINUOUS_BATCHING.md](CONTINUOUS_BATCHING.md) for details).
 
 ### Server flags
 
 ```
---n-parallel N       Max concurrent inference requests (default: 0 = unlimited)
+--n-parallel N       Number of concurrent inference slots (default: 1)
+--ctx-size N         Total KV cache size; per-slot budget = ctx-size / n-parallel (default: 4096)
+--batch-size N       Max tokens per decode call (default: 2048)
 ```
 
-- `0` means no limit — the server will accept and run as many concurrent requests as
-  arrive. This is suitable when requests are infrequent or the system has ample
-  resources.
-- Setting `N > 0` limits concurrent predictions via a semaphore. Excess requests queue
-  and wait for a slot to become available.
+With `n_parallel=1` (default), inference is sequential — one request at a time.
+Increase `--n-parallel` to enable concurrent request handling with batched decoding.
 
 ### Guidance
 
-- **CPU-only**: Set `--n-parallel 1` or a small number. Multiple concurrent contexts
-  on CPU will compete for cores and cause thread contention, reducing per-request
-  throughput. However, the server will still correctly handle queued requests.
-- **GPU with ample VRAM**: Higher `--n-parallel` values work well. Each context
-  allocates its own KV cache, so VRAM usage scales with `n_parallel * ctx_size`.
-- **Memory budget**: Each slot allocates `ctx_size` tokens of KV cache. For F16 KV
-  with a 7B model and 4096 context, this is roughly 1-2 GB per slot.
+- **CPU-only**: Even `--n-parallel 2-4` provides measurable speedup because the
+  batched `llama_decode` amortises per-call overhead.
+- **GPU with ample VRAM**: Higher `--n-parallel` values (4-16) exploit GPU parallelism
+  for near-linear throughput scaling.
+- **Memory budget**: Total KV cache is `ctx-size` tokens, split evenly across slots.
+  For F16 KV with a 7B model and 4096 total context, this is roughly 1-2 GB total.
+
+For architecture details and benchmark results, see
+[CONTINUOUS_BATCHING.md](CONTINUOUS_BATCHING.md).
 
 ## Flash Attention
 
@@ -201,12 +209,13 @@ especially for longer contexts.
 ### Server flags
 
 ```
---ctx-size N         Context window size per slot (default: 4096)
+--ctx-size N         Total KV cache across all slots (default: 4096)
 --batch-size N       Batch size for prompt processing (default: 2048)
 ```
 
-- `ctx-size` determines the maximum sequence length each inference slot can handle.
-  Larger values support longer conversations but use more memory per slot.
+- `ctx-size` is the total KV cache budget. With `--n-parallel N`, each slot gets
+  `ctx-size / N` tokens of context. Larger values support longer conversations but
+  use more memory.
 - `batch-size` controls how many tokens are processed at once during prompt prefill.
   Larger values improve prefill throughput but use more memory.
 
@@ -246,40 +255,46 @@ llamacppserver --ngpu 99 --flash-attn --split-mode row --tensor-split 0.5,0.5 --
 With 2 identical GPUs and latency-sensitive workloads, tensor parallelism can reduce
 per-request latency by splitting every layer across both GPUs.
 
-## Continuous Batching
+## Comparison with Other Inference Solutions
 
-Continuous batching (also called dynamic batching) is an optimization where multiple
-concurrent requests share a **single** llama.cpp context. Instead of each request
-getting its own context and KV cache, all requests share one large KV cache, with each
-request isolated by a unique `seq_id`. A scheduler combines tokens from all active
-requests into a single `llama_decode` call per "tick."
+llamacpp-server occupies a specific niche: a lightweight, self-contained Go server
+with gRPC and HTTP+SSE interfaces, powered by llama.cpp's C inference engine. The
+table below compares it with popular alternatives.
 
-This is the approach used by llama.cpp's own HTTP server (`llama-server`) and by
-production inference engines like vLLM and SGLang.
+| Feature | llamacpp-server | llama.cpp server | vLLM | SGLang | TGI |
+|---------|----------------|-----------------|------|--------|-----|
+| **Language** | Go + C (CGO) | C++ | Python + C++ | Python + C++ | Rust + Python |
+| **API** | gRPC + HTTP/SSE | HTTP (OpenAI-compat) | HTTP (OpenAI-compat) | HTTP (OpenAI-compat) | HTTP + gRPC |
+| **Model formats** | GGUF | GGUF | HF, GPTQ, AWQ, GGUF | HF, GPTQ, AWQ | HF, GPTQ, AWQ |
+| **Quantization** | GGUF (1.5–8 bit) | GGUF (1.5–8 bit) | GPTQ, AWQ, INT4/8 | GPTQ, AWQ, FP4/FP8 | GPTQ, AWQ |
+| **Continuous batching** | Yes | Yes | Yes (PagedAttention) | Yes (RadixAttention) | Yes |
+| **Pipeline parallelism** | Yes | Yes | Yes | Yes | Yes |
+| **Tensor parallelism** | Yes (experimental) | Yes (experimental) | Yes | Yes | Yes |
+| **Flash attention** | Yes | Yes | Yes | Yes | Yes |
+| **CPU inference** | Excellent | Excellent | Limited | Limited | Limited |
+| **GPU inference** | Good | Good | Excellent | Excellent | Excellent |
+| **Dependencies** | Minimal (Go, llama.cpp) | Minimal (C++) | Python ecosystem, CUDA | Python ecosystem, CUDA | Rust toolchain, CUDA |
+| **Best for** | Embedded, edge, gRPC integration | Local / CLI usage | GPU-heavy production | Agentic / chat workloads | Enterprise deployment |
 
-### How it differs from the current approach
+### When to choose llamacpp-server
 
-The server currently uses **separate contexts**: each gRPC `Predict` call creates an
-independent llama.cpp context with its own KV cache. This is simple and correct, but
-each `llama_decode` call is a separate GPU forward pass.
+- **gRPC-native integration** — your stack already uses gRPC and you want native
+  streaming without an HTTP adapter layer.
+- **CPU or edge deployment** — llama.cpp is the most optimized engine for CPU inference
+  and quantized models on resource-constrained hardware.
+- **Minimal dependencies** — a single Go binary with no Python, no CUDA toolkit
+  install, no virtual environments. Ideal for air-gapped or embedded environments.
+- **GGUF model ecosystem** — you use quantized GGUF models from sources like
+  Hugging Face or TheBloke.
 
-Continuous batching replaces this with a shared context and a central scheduler that
-batches tokens from all active requests into a single `llama_decode` call. The main
-benefits are:
+### When to choose something else
 
-- **GPU throughput**: One batched forward pass instead of N separate ones (2-8x
-  improvement under concurrency).
-- **VRAM efficiency**: One shared KV cache instead of N independent caches.
-- **Chunked prefill**: Long prompts are interleaved with decode tokens from other
-  requests, preventing prefill stalls.
-
-Continuous batching with `n_parallel=1` degenerates to the same behavior as separate
-contexts, making it a strict superset of the current approach. It is planned to
-eventually supersede the current mode, but will be introduced as an opt-in feature
-first (`--continuous-batching` flag).
-
-For the full implementation plan, architecture details, effort estimate, and rollout
-strategy, see [CONTINUOUS_BATCHING.md](CONTINUOUS_BATCHING.md).
+- **Maximum GPU throughput** — vLLM's PagedAttention and SGLang's RadixAttention are
+  heavily optimized for high-concurrency GPU workloads with HuggingFace model formats.
+- **OpenAI API compatibility** — if your application expects an OpenAI-compatible
+  endpoint, vLLM, SGLang, or llama.cpp's own server provide that out of the box.
+- **Enterprise scale** — TGI and vLLM have more mature autoscaling, load balancing,
+  and monitoring integrations for large-scale deployments.
 
 ## Testing Parallel Inference
 
@@ -307,8 +322,7 @@ The parallel test:
 5. Exits with code 0 if all requests succeeded, 1 if any failed.
 
 Even on CPU-only systems, the test verifies that the server handles concurrent requests
-without hangs, crashes, or data corruption. Requests may be serialized or run in
-parallel depending on server configuration and system resources.
+without hangs, crashes, or data corruption.
 
 ## All Server Flags Reference
 
@@ -322,13 +336,13 @@ Model loading:
 
 Inference:
   --flash-attn         Enable flash attention
-  --ctx-size N         Context window size per slot (default: 4096)
+  --ctx-size N         Total KV cache across all slots (default: 4096)
   --batch-size N       Batch size for prompt processing (default: 2048)
   --threads N          Threads for generation, 0=auto (default: 0)
   --threads-batch N    Threads for batch processing, 0=auto (default: 0)
 
 Concurrency:
-  --n-parallel N       Max concurrent predictions, 0=unlimited (default: 0)
+  --n-parallel N       Number of concurrent inference slots (default: 1)
 
 Network:
   --host ADDR          Bind address (default: 127.0.0.1)
@@ -338,10 +352,10 @@ Network:
 
 ## Further Reading
 
-- [Continuous Batching — Planning Document](CONTINUOUS_BATCHING.md) — implementation
-  plan and rollout strategy for adding continuous batching to llamacpp-server.
+- [Continuous Batching — Architecture and Benchmarks](CONTINUOUS_BATCHING.md)
 - [llama.cpp Pipeline Parallelism PR #6017](https://github.com/ggml-org/llama.cpp/pull/6017)
 - [llama.cpp Tensor Parallelism Discussion](https://github.com/ggml-org/llama.cpp/discussions/20252)
 - [llama.cpp Server README](https://github.com/ggml-org/llama.cpp/blob/master/examples/server/README.md)
 - [Flash Attention PR #5021](https://github.com/ggml-org/llama.cpp/pull/5021)
-- [LlamaCppEx Continuous Batching ADR](https://hexdocs.pm/llama_cpp_ex/006-continuous-batching.html)
+- [vLLM Project](https://github.com/vllm-project/vllm)
+- [SGLang Project](https://github.com/sgl-project/sglang)

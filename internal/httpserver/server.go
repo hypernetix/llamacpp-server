@@ -7,7 +7,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/hypernetix/llamacpp_server/internal/inference"
+	"github.com/hypernetix/llamacpp_server/internal/inferenceengine"
 	"github.com/hypernetix/llamacpp_server/internal/llmservice"
 	"github.com/hypernetix/llamacpp_server/internal/logging"
 )
@@ -158,7 +158,7 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleStreamingCompletion(w http.ResponseWriter, r *http.Request, req *completionRequest, args inference.PredictArgs) {
+func (s *Server) handleStreamingCompletion(w http.ResponseWriter, r *http.Request, req *completionRequest, args inferenceengine.PredictArgs) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "streaming not supported")
@@ -199,7 +199,7 @@ func (s *Server) handleStreamingCompletion(w http.ResponseWriter, r *http.Reques
 	flusher.Flush()
 }
 
-func (s *Server) handleNonStreamingCompletion(w http.ResponseWriter, r *http.Request, req *completionRequest, args inference.PredictArgs) {
+func (s *Server) handleNonStreamingCompletion(w http.ResponseWriter, r *http.Request, req *completionRequest, args inferenceengine.PredictArgs) {
 	response, err := s.service.Predict(req.Model, req.Prompt, args, nil)
 	if err != nil {
 		s.logger.Errorf("Completions failed: %v", err)
@@ -210,7 +210,7 @@ func (s *Server) handleNonStreamingCompletion(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, completionResponse{Message: response})
 }
 
-func buildPredictArgs(req *completionRequest) inference.PredictArgs {
+func buildPredictArgs(req *completionRequest) inferenceengine.PredictArgs {
 	temp := req.Temperature
 	if temp < 0 {
 		temp = 0
@@ -228,7 +228,7 @@ func buildPredictArgs(req *completionRequest) inference.PredictArgs {
 		maxTokens = 0
 	}
 
-	args := inference.PredictArgs{
+	args := inferenceengine.PredictArgs{
 		NPredict:          maxTokens,
 		Temp:              temp,
 		TopP:              topP,

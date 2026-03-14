@@ -193,9 +193,22 @@ try {
         exit $HttpExit
     }
 
+    # Run parallel inference test (multi-slot server)
+    if ($CI) {
+        $ClientParallelContainer = "llamacpp-client-grpc-cb-ci"
+    } else {
+        $ClientParallelContainer = "llamacpp-client-grpc-cb"
+    }
+
+    $ParallelExit = Run-TransportTest -Transport "Parallel" -ClientService "client-grpc-cb" -ClientContainer $ClientParallelContainer -DoBuild $false
+
+    if ($ParallelExit -ne 0) {
+        exit $ParallelExit
+    }
+
     Write-Info ""
     Write-Info "========================================="
-    Write-Info "  All transport tests PASSED"
+    Write-Info "  All tests PASSED (gRPC, HTTP, Parallel)"
     Write-Info "========================================="
 
     exit 0

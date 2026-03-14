@@ -1,0 +1,294 @@
+openapi: 3.1.0
+info:
+  title: llamacpp-server HTTP+SSE API
+  version: 1.0.0
+  description: |
+    HTTP+SSE API for the llamacpp-server. Provides model loading with progress
+    streaming and text generation with optional token-by-token streaming via
+    Server-Sent Events (SSE).
+
+    This API runs alongside the gRPC interface (defined in `api/proto/llmserver.proto`).
+    Both interfaces share the same inference engine and model state.
+
+servers:
+  - url: http://localhost:8082
+    description: Default local server
+
+paths:
+  /health:
+    get:
+      operationId: health
+      summary: Health check
+      description: Returns server health status. Use this to verify the server is running.
+      responses:
+        "200":
+          description: Server is healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /models/load:
+    post:
+      operationId: loadModel
+      summary: Load a model
+      description: |
+        Loads a GGUF model from the specified filesystem path. Returns an SSE
+        stream of progress events. The model is ready for inference after the
+        final `[DONE]` sentinel.
+
+        If the model is already loaded, the operation completes immediately.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoadModelRequest"
+      responses:
+        "200":
+          description: SSE stream of loading progress events.
+          content:
+            text/event-stream:
+              schema:
+                description: |
+                  Each SSE `data:` line contains a JSON object with `progress` (0.0–1.0).
+                  The stream ends with `data: [DONE]`.
+                  On error, an `event: error` message is sent.
+                type: string
+              examples:
+                progress:
+                  summary: Typical progress stream
+                  value: |
+                    data: {"progress":0.25}
+
+                    data: {"progress":0.5}
+
+                    data: {"progress":0.75}
+
+                    data: {"progress":1}
+
+                    data: [DONE]
+                error:
+                  summary: Error during loading
+                  value: |
+                    data: {"progress":0.3}
+
+                    event: error
+                    data: "failed to load model: file not found"
+        "400":
+          description: Invalid request (missing path).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /completions:
+    post:
+      operationId: completions
+      summary: Generate text completion
+      description: |
+        Generates text from a prompt using the loaded model. Supports both
+        streaming (SSE) and non-streaming modes.
+
+        **Streaming mode** (`"stream": true`): Returns an SSE stream where each
+        `data:` line contains a JSON object with the generated token. The stream
+        ends with `data: [DONE]`.
+
+        **Non-streaming mode** (`"stream": false`): Returns a single JSON response
+        with the complete generated text.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompletionRequest"
+      responses:
+        "200":
+          description: |
+            Streaming: SSE stream of completion events.
+            Non-streaming: single JSON response.
+          content:
+            text/event-stream:
+              schema:
+                description: |
+                  Each SSE `data:` line contains a JSON `CompletionResponse`.
+                  The stream ends with `data: [DONE]`.
+                  On error, an `event: error` message is sent.
+                type: string
+              examples:
+                streaming:
+                  summary: Streaming token-by-token
+                  value: |
+                    data: {"message":"The","token":450,"tokens":1}
+
+                    data: {"message":" capital","token":6421,"tokens":2}
+
+                    data: {"message":" of","token":310,"tokens":3}
+
+                    data: {"message":" France","token":4643,"tokens":4}
+
+                    data: [DONE]
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompletionResponse"
+              examples:
+                non-streaming:
+                  summary: Non-streaming full response
+                  value:
+                    message: "The capital of France is Paris."
+                    token: 0
+                    tokens: 0
+        "400":
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Prediction failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    LoadModelRequest:
+      type: object
+      required:
+        - path
+      properties:
+        path:
+          type: string
+          description: Filesystem path to the GGUF model file.
+          example: /models/SmolLM2-135M-Instruct-Q4_K_M.gguf
+
+    CompletionRequest:
+      type: object
+      required:
+        - model
+        - prompt
+      properties:
+        model:
+          type: string
+          description: Path of the loaded model (must match the path used in `/models/load`).
+          example: /models/SmolLM2-135M-Instruct-Q4_K_M.gguf
+        prompt:
+          type: string
+          description: Input text to generate from.
+          example: "<|im_start|>user\nWhat is the capital of France?<|im_end|>\n<|im_start|>assistant\n"
+        stream:
+          type: boolean
+          default: false
+          description: If true, tokens are streamed via SSE as they are generated.
+        max_tokens:
+          type: integer
+          default: 0
+          description: Maximum number of tokens to generate. 0 means no generation.
+          example: 100
+        temperature:
+          type: number
+          format: float
+          default: 0.0
+          description: |
+            Sampling temperature. 0.0 = greedy (deterministic argmax).
+            Higher values increase randomness.
+          example: 0.7
+        top_p:
+          type: number
+          format: float
+          default: 0.0
+          description: Nucleus sampling threshold. 0.0 or 1.0 = disabled.
+          example: 0.95
+        top_k:
+          type: integer
+          format: int32
+          default: 0
+          description: Top-k sampling. 0 = disabled.
+          example: 40
+        options:
+          $ref: "#/components/schemas/CompletionOptions"
+
+    CompletionOptions:
+      type: object
+      description: Advanced sampling and inference options. All fields are optional.
+      properties:
+        min_p:
+          type: number
+          format: float
+          description: Minimum probability threshold for sampling.
+          example: 0.05
+        min_tokens_to_keep:
+          type: integer
+          format: int32
+          description: Minimum number of tokens to keep during sampling.
+        repetition_penalty:
+          type: number
+          format: float
+          description: Penalty for repeated tokens. 1.0 = no penalty.
+          example: 1.1
+        length_penalty:
+          type: number
+          format: float
+          description: Length penalty factor.
+        diversity_penalty:
+          type: number
+          format: float
+          description: Diversity penalty factor.
+        no_repeat_ngram_size:
+          type: integer
+          format: int32
+          description: Prevent repeating n-grams of this size. 0 = disabled.
+        random_seed:
+          type: integer
+          format: int32
+          description: Random seed for reproducible sampling. -1 = random.
+          example: 42
+        max_kv_size:
+          type: integer
+          format: int32
+          description: Maximum KV cache size override.
+        prefill_step_size:
+          type: integer
+          format: int32
+          description: Prefill chunk size override.
+        kv_bits:
+          type: integer
+          format: int32
+          description: KV cache quantization bits.
+        kv_group_size:
+          type: integer
+          format: int32
+          description: KV cache quantization group size.
+        quantized_kv_start:
+          type: integer
+          format: int32
+          description: Layer index where quantized KV cache starts.
+
+    CompletionResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Generated text (one token in streaming mode, full text otherwise).
+          example: "The"
+        token:
+          type: integer
+          description: Token ID of the generated token.
+          example: 450
+        tokens:
+          type: integer
+          description: Running total of tokens generated so far.
+          example: 5
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Human-readable error message.
+          example: "path is required"
