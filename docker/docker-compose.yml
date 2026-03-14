@@ -90,6 +90,41 @@ services:
       --max-tokens 50
     restart: "no"
 
+  # Multi-slot server (4 parallel inference slots) for parallel test
+  server-cb:
+    image: llamacpp-server:${IMAGE_TAG:-latest}
+    container_name: llamacpp-server-cb
+    volumes:
+      - ${MODEL_PATH:?MODEL_PATH is required}:/models/model.gguf:ro
+    environment:
+      - LD_LIBRARY_PATH=/app
+    command: ["--grpc-port", "50051", "--n-parallel", "4"]
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/50051' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: "no"
+
+  # Parallel inference client test (against multi-slot server)
+  client-grpc-cb:
+    image: llamacpp-client:${IMAGE_TAG:-latest}
+    container_name: llamacpp-client-grpc-cb
+    depends_on:
+      server-cb:
+        condition: service_healthy
+    command: >
+      --host server-cb
+      --port 50051
+      --transport grpc
+      --model /models/model.gguf
+      --test-mode parallel
+      --parallel-n 4
+      --temperature 0
+      --max-tokens 50
+    restart: "no"
+
   # Alternative: Run just the server for external testing
   server-only:
     build:

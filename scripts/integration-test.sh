@@ -170,7 +170,7 @@ cleanup() {
     fi
     
     if [[ $exit_code -eq 0 ]]; then
-        log_info "Integration test PASSED (both gRPC and HTTP)"
+        log_info "Integration test PASSED (gRPC, HTTP, Parallel)"
     else
         log_error "Integration test FAILED (exit code: $exit_code)"
     fi
@@ -181,11 +181,12 @@ trap cleanup EXIT
 
 # Run a single transport test
 # Uses --exit-code-from to get the client's exit code (not the server's SIGTERM code)
-# Usage: run_transport_test <transport_name> <client_service> <client_container>
+# Usage: run_transport_test <transport_name> <server_service> <client_service> <client_container>
 run_transport_test() {
     local transport=$1
-    local client_service=$2
-    local client_container=$3
+    local server_service=$2
+    local client_service=$3
+    local client_container=$4
 
     log_info ""
     log_info "========================================="
@@ -197,7 +198,7 @@ run_transport_test() {
     local compose_exit=0
     docker compose -f "$COMPOSE_FILE" up $BUILD_ARGS \
         --abort-on-container-exit --exit-code-from "$client_service" \
-        --no-deps server "$client_service" || compose_exit=$?
+        --no-deps "$server_service" "$client_service" || compose_exit=$?
 
     log_info "Docker compose exit code: $compose_exit"
 
@@ -230,7 +231,7 @@ fi
 FIRST_BUILD_ARGS="$BUILD_ARGS"
 
 # Run gRPC test
-run_transport_test "gRPC" "client-grpc" "$CLIENT_GRPC_CONTAINER"
+run_transport_test "gRPC" "server" "client-grpc" "$CLIENT_GRPC_CONTAINER"
 GRPC_EXIT=$?
 
 # Clear --build for second run (images already built)
@@ -242,7 +243,7 @@ if [[ $GRPC_EXIT -ne 0 ]]; then
 fi
 
 # Run HTTP test (server restarts, model reloads — acceptable for test)
-run_transport_test "HTTP" "client-http" "$CLIENT_HTTP_CONTAINER"
+run_transport_test "HTTP" "server" "client-http" "$CLIENT_HTTP_CONTAINER"
 HTTP_EXIT=$?
 
 if [[ $HTTP_EXIT -ne 0 ]]; then
@@ -256,7 +257,7 @@ else
     PARALLEL_CLIENT_CONTAINER="llamacpp-client-grpc-cb"
 fi
 
-run_transport_test "Parallel" "client-grpc-cb" "$PARALLEL_CLIENT_CONTAINER"
+run_transport_test "Parallel" "server-cb" "client-grpc-cb" "$PARALLEL_CLIENT_CONTAINER"
 PARALLEL_EXIT=$?
 
 if [[ $PARALLEL_EXIT -ne 0 ]]; then

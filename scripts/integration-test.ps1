@@ -72,6 +72,7 @@ $ClientHttpContainer = "llamacpp-client-http"
 function Run-TransportTest {
     param(
         [string]$Transport,
+        [string]$ServerService,
         [string]$ClientService,
         [string]$ClientContainer,
         [bool]$DoBuild
@@ -82,7 +83,7 @@ function Run-TransportTest {
     Write-Info "  Running $Transport integration test"
     Write-Info "========================================="
 
-    $ComposeArgs = @("-f", $ComposeFile, "up", "--abort-on-container-exit", "--exit-code-from", $ClientService, "--no-deps", "server", $ClientService)
+    $ComposeArgs = @("-f", $ComposeFile, "up", "--abort-on-container-exit", "--exit-code-from", $ClientService, "--no-deps", $ServerService, $ClientService)
     if ($DoBuild) {
         $ComposeArgs += "--build"
     }
@@ -179,7 +180,7 @@ try {
     }
 
     # Run gRPC test (with --build if requested)
-    $GrpcExit = Run-TransportTest -Transport "gRPC" -ClientService "client-grpc" -ClientContainer $ClientGrpcContainer -DoBuild $Build.IsPresent
+    $GrpcExit = Run-TransportTest -Transport "gRPC" -ServerService "server" -ClientService "client-grpc" -ClientContainer $ClientGrpcContainer -DoBuild $Build.IsPresent
 
     if ($GrpcExit -ne 0) {
         Write-Err "gRPC test failed (exit code: $GrpcExit), skipping HTTP test"
@@ -187,7 +188,7 @@ try {
     }
 
     # Run HTTP test (no rebuild needed, images already built)
-    $HttpExit = Run-TransportTest -Transport "HTTP" -ClientService "client-http" -ClientContainer $ClientHttpContainer -DoBuild $false
+    $HttpExit = Run-TransportTest -Transport "HTTP" -ServerService "server" -ClientService "client-http" -ClientContainer $ClientHttpContainer -DoBuild $false
 
     if ($HttpExit -ne 0) {
         exit $HttpExit
@@ -200,7 +201,7 @@ try {
         $ClientParallelContainer = "llamacpp-client-grpc-cb"
     }
 
-    $ParallelExit = Run-TransportTest -Transport "Parallel" -ClientService "client-grpc-cb" -ClientContainer $ClientParallelContainer -DoBuild $false
+    $ParallelExit = Run-TransportTest -Transport "Parallel" -ServerService "server-cb" -ClientService "client-grpc-cb" -ClientContainer $ClientParallelContainer -DoBuild $false
 
     if ($ParallelExit -ne 0) {
         exit $ParallelExit
