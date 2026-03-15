@@ -27,7 +27,8 @@ services:
       dockerfile: docker/Dockerfile.server
       args:
         LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
-    image: llamacpp-server:${IMAGE_TAG:-latest}
+        GPU_VARIANT: ${GPU_VARIANT:-cpu}
+    image: llamacpp-server:${IMAGE_TAG:-latest}-${GPU_VARIANT:-cpu}
     container_name: llamacpp-server
     ports:
       - "${GRPC_PORT:-50051}:50051"
@@ -51,8 +52,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.client
-      args:
-        LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
     image: llamacpp-client:${IMAGE_TAG:-latest}
     container_name: llamacpp-client-grpc
     depends_on:
@@ -73,8 +72,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.client
-      args:
-        LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
     image: llamacpp-client:${IMAGE_TAG:-latest}
     container_name: llamacpp-client-http
     depends_on:
@@ -92,7 +89,7 @@ services:
 
   # Multi-slot server (4 parallel inference slots) for parallel test
   server-cb:
-    image: llamacpp-server:${IMAGE_TAG:-latest}
+    image: llamacpp-server:${IMAGE_TAG:-latest}-${GPU_VARIANT:-cpu}
     container_name: llamacpp-server-cb
     volumes:
       - ${MODEL_PATH:?MODEL_PATH is required}:/models/model.gguf:ro
@@ -132,7 +129,8 @@ services:
       dockerfile: docker/Dockerfile.server
       args:
         LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
-    image: llamacpp-server:${IMAGE_TAG:-latest}
+        GPU_VARIANT: ${GPU_VARIANT:-cpu}
+    image: llamacpp-server:${IMAGE_TAG:-latest}-${GPU_VARIANT:-cpu}
     container_name: llamacpp-server-standalone
     profiles:
       - standalone

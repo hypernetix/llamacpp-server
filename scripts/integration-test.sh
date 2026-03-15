@@ -138,6 +138,8 @@ fi
 log_info "Starting integration test..."
 log_info "  Compose file: $COMPOSE_FILE"
 log_info "  Test mode: $TEST_MODE"
+log_info "  LLAMA_VERSION: ${LLAMA_VERSION:-<not set>}"
+log_info "  GPU_VARIANT: ${GPU_VARIANT:-<not set, compose default: cpu>}"
 
 # Export environment variables for docker-compose
 export TEST_MODE="$TEST_MODE"
@@ -201,6 +203,8 @@ run_transport_test() {
         --no-deps "$server_service" "$client_service" || compose_exit=$?
 
     log_info "Docker compose exit code: $compose_exit"
+    log_info "Containers used:"
+    docker ps -a --filter "name=llamacpp" --format "  {{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null || true
 
     if [[ $compose_exit -ne 0 ]]; then
         # Show actual client container exit code for debugging

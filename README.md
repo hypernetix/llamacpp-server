@@ -136,6 +136,7 @@ make run-inferencetest2 MODEL_PATH=/path/to/model.gguf
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LLAMA_VERSION` | *(see Makefile)* | llama.cpp release version to download |
+| `GPU_VARIANT` | `auto` | GPU variant: `auto`, `cpu`, `vulkan`, `rocm`, `cuda12`, `cuda13` |
 | `GRPC_PORT` | `50052` | gRPC server port |
 | `HTTP_PORT` | `8082` | HTTP+SSE server port |
 | `MODEL_PATH` | *(none)* | Path to GGUF model file (required for tests) |
@@ -443,6 +444,8 @@ This ensures Docker builds are identical to local builds.
 
 - [Parallelism Modes](docs/PARALLELISM.md) — thread, pipeline, and tensor parallelism; comparison with vLLM, SGLang, TGI
 - [Continuous Batching](docs/CONTINUOUS_BATCHING.md) — shared-context architecture, benchmarks, and future work
+- [Roadmap](docs/ROADMAP.md) — planned features and development directions
+- [GPU Build Strategy](docs/GPU_BUILD_STRATEGY.md) — GPU variant builds, Docker images, and CI matrix
 
 ## CI/CD
 

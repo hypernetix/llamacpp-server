@@ -101,47 +101,23 @@ jobs:
           # Show where libomp is installed for debugging
           brew --prefix libomp
       
-      # Step 6: Cache llama.cpp binaries
+      # Step 6: Cache llama.cpp binaries (variant-specific directory)
       - name: Cache llama.cpp binaries
         uses: actions/cache@v4
         id: llama-cache
         with:
-          path: build/llama-binaries
-          # Cache key includes version suffix to invalidate on Makefile changes
-          key: llama-v2-${{ runner.os }}-${{ runner.arch }}-${{ env.LLAMA_VERSION }}
+          path: build/llama-binaries-cpu
+          key: llama-v3-${{ runner.os }}-${{ runner.arch }}-${{ env.LLAMA_VERSION }}
       
       # Step 7: Download and prepare llama.cpp binaries
       - name: Prepare llama.cpp binaries
         if: steps.llama-cache.outputs.cache-hit != 'true'
         run: make prepare
       
-      # Step 7b: Recreate symlinks (needed even on cache hit, symlinks may not be preserved)
-      - name: Recreate library symlinks
-        if: runner.os != 'Windows'
-        run: |
-          cd build/llama-binaries/lib
-          echo "=== Library files in lib/ ==="
-          ls -la
-          echo ""
-          echo "=== Creating symlinks for library compatibility ==="
-          # Linux: ggml-cpu-x64 -> ggml-cpu
-          if [ -f "libggml-cpu-x64.so" ] && [ ! -e "libggml-cpu.so" ]; then
-            ln -sf libggml-cpu-x64.so libggml-cpu.so
-            echo "Created symlink: libggml-cpu.so -> libggml-cpu-x64.so"
-          fi
-          # macOS arm64: ggml-cpu-arm64 -> ggml-cpu
-          if [ -f "libggml-cpu-arm64.dylib" ] && [ ! -e "libggml-cpu.dylib" ]; then
-            ln -sf libggml-cpu-arm64.dylib libggml-cpu.dylib
-            echo "Created symlink: libggml-cpu.dylib -> libggml-cpu-arm64.dylib"
-          fi
-          # macOS x64: ggml-cpu-x64 -> ggml-cpu
-          if [ -f "libggml-cpu-x64.dylib" ] && [ ! -e "libggml-cpu.dylib" ]; then
-            ln -sf libggml-cpu-x64.dylib libggml-cpu.dylib
-            echo "Created symlink: libggml-cpu.dylib -> libggml-cpu-x64.dylib"
-          fi
-          echo ""
-          echo "=== Final library files ==="
-          ls -la
+      # Step 7b: Activate variant symlink (needed on cache hit — symlink is outside cached dir)
+      - name: Activate variant symlink
+        if: steps.llama-cache.outputs.cache-hit == 'true'
+        run: make activate-variant
       
       # Step 8: Build all Go binaries
       - name: Build
@@ -256,22 +232,22 @@ jobs:
       
       - name: Build Docker images
         run: |
-          docker buildx build -f docker/Dockerfile.server -t llamacpp-server:ci \
+          docker buildx build -f docker/Dockerfile.server -t llamacpp-server:ci-cpu \
             --build-arg LLAMA_VERSION=${{ env.LLAMA_VERSION }} \
+            --build-arg GPU_VARIANT=cpu \
             --cache-from type=local,src=/tmp/.buildx-cache \
             --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
             --load \
             .
           docker buildx build -f docker/Dockerfile.client -t llamacpp-client:ci \
-            --build-arg LLAMA_VERSION=${{ env.LLAMA_VERSION }} \
             --load \
             .
       
       - name: Run Docker integration test
         run: |
           chmod +x scripts/integration-test.sh
-          # Use IMAGE_TAG=ci to match the pre-built images
-          IMAGE_TAG=ci ./scripts/integration-test.sh --model "/tmp/test-model/${{ env.TEST_MODEL_NAME }}" --verbose
+          # Use IMAGE_TAG=ci and GPU_VARIANT=cpu to match the pre-built server image (ci-cpu)
+          IMAGE_TAG=ci GPU_VARIANT=cpu ./scripts/integration-test.sh --model "/tmp/test-model/${{ env.TEST_MODEL_NAME }}" --verbose
         timeout-minutes: 10
       
       - name: Move cache

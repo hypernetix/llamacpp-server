@@ -28,10 +28,12 @@ COPY . .
 
 # Use Makefile to prepare llama.cpp binaries
 ARG LLAMA_VERSION
+ARG GPU_VARIANT=cpu
 ENV LLAMA_VERSION=${LLAMA_VERSION}
-RUN make prepare LLAMA_VERSION=${LLAMA_VERSION}
+RUN make prepare LLAMA_VERSION=${LLAMA_VERSION} GPU_VARIANT=${GPU_VARIANT}
 
 # Build the llamacpp server using Makefile
+# (make prepare already set up build/llama-binaries -> build/llama-binaries-<variant>)
 RUN make build-llamacppserver
 
 # =============================================================================
@@ -50,7 +52,7 @@ WORKDIR /app
 # Copy the binary
 COPY --from=builder /app/cmd/llamacppserver/llamacppserver /app/
 
-# Copy ALL shared libraries from the lib directory
+# Copy shared libraries (prepare creates build/llama-binaries symlink to active variant)
 COPY --from=builder /app/build/llama-binaries/lib/ /app/
 
 # Create symlinks if needed

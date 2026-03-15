@@ -44,7 +44,8 @@ services:
       dockerfile: docker/Dockerfile.server
       args:
         LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
-    image: llamacpp-server:${IMAGE_TAG:-ci}
+        GPU_VARIANT: ${GPU_VARIANT:-cpu}
+    image: llamacpp-server:${IMAGE_TAG:-ci}-${GPU_VARIANT:-cpu}
     container_name: llamacpp-server-ci
     depends_on:
       model-downloader:
@@ -68,8 +69,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.client
-      args:
-        LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
     image: llamacpp-client:${IMAGE_TAG:-ci}
     container_name: llamacpp-client-grpc-ci
     depends_on:
@@ -90,8 +89,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.client
-      args:
-        LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
     image: llamacpp-client:${IMAGE_TAG:-ci}
     container_name: llamacpp-client-http-ci
     depends_on:
@@ -109,7 +106,7 @@ services:
 
   # Multi-slot server (4 parallel inference slots)
   server-cb:
-    image: llamacpp-server:${IMAGE_TAG:-ci}
+    image: llamacpp-server:${IMAGE_TAG:-ci}-${GPU_VARIANT:-cpu}
     container_name: llamacpp-server-cb-ci
     depends_on:
       model-downloader:

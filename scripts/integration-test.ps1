@@ -108,6 +108,8 @@ function Run-TransportTest {
     }
 
     Write-Info "Docker compose exit code: $composeExitCode"
+    Write-Info "Containers used:"
+    docker ps -a --filter "name=llamacpp" --format "  {{.Names}}`t{{.Image}}`t{{.Status}}" | Out-Host
 
     if ($composeExitCode -ne 0) {
         # Double-check actual client container exit code
@@ -161,6 +163,8 @@ try {
     Write-Info "Starting integration test..."
     Write-Info "  Compose file: $ComposeFile"
     Write-Info "  Test mode: $TestMode"
+    Write-Info "  LLAMA_VERSION: $(if ($env:LLAMA_VERSION) { $env:LLAMA_VERSION } else { '<not set>' })"
+    Write-Info "  GPU_VARIANT: $(if ($env:GPU_VARIANT) { $env:GPU_VARIANT } else { '<not set, compose default: cpu>' })"
 
     # Build and prepare
     Write-Info "Building and starting containers..."

@@ -26,9 +26,17 @@
 LLAMA_VERSION ?= b8323
 export LLAMA_VERSION
 
+# GPU variant: auto (detect via nvcc), cpu, vulkan, rocm, cuda12, cuda13
+# See docs/GPU_BUILD_STRATEGY.md for details on which variants are available per platform
+GPU_VARIANT ?= auto
+
 # Build directories (use forward slashes - works everywhere)
 BUILD_DIR := build
-LLAMA_DIR := $(BUILD_DIR)/llama-binaries
+# Variant-specific directory for downloaded llama.cpp binaries (allows coexistence)
+# Deferred expansion (=) so GPU_VARIANT is resolved before LLAMA_DIR is used
+LLAMA_DIR = $(BUILD_DIR)/llama-binaries-$(GPU_VARIANT)
+# Stable path referenced by CGO directives in internal/bindings/llamacpp.go
+LLAMA_ACTIVE_DIR := $(BUILD_DIR)/llama-binaries
 
 # Go commands
 GO_BUILD_FLAGS := -v
@@ -100,34 +108,75 @@ else
 endif
 
 # =============================================================================
-# CUDA Detection
+# GPU Variant Resolution
 # =============================================================================
 
-ifeq ($(OS),Windows_NT)
-    CUDA_AVAILABLE := $(shell $(PS) "if (Get-Command nvcc -ErrorAction SilentlyContinue) { 'yes' }")
-else
-    CUDA_AVAILABLE := $(shell command -v nvcc 2>/dev/null)
-endif
+# When GPU_VARIANT=auto, detect GPU via nvcc and resolve to a concrete variant.
+# Explicit values (cpu, vulkan, rocm, cuda12, cuda13) override auto-detection.
+# macOS always uses the standard archive (Metal is built into the arm64 binary).
 
-ifdef CUDA_AVAILABLE
-    ifeq ($(DETECTED_OS),Windows)
-        CUDA_VERSION := 12.4
-        LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-win-cuda-cu$(CUDA_VERSION)-$(ARCH).zip
-        CUDA_ARCHIVE := cudart-llama-bin-win-cuda-cu$(CUDA_VERSION)-$(ARCH).zip
-        LLAMA_URL := https://github.com/ggml-org/llama.cpp/releases/download/$(LLAMA_VERSION)/$(LLAMA_ARCHIVE)
-        CUDA_URL := https://github.com/ggml-org/llama.cpp/releases/download/$(LLAMA_VERSION)/$(CUDA_ARCHIVE)
-        DLLS += cudart64_12.dll cublas64_12.dll cublasLt64_12.dll
-    else ifeq ($(DETECTED_OS),Linux)
-        LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-ubuntu-vulkan-x64.tar.gz
-        LLAMA_URL := https://github.com/ggml-org/llama.cpp/releases/download/$(LLAMA_VERSION)/$(LLAMA_ARCHIVE)
+ifeq ($(GPU_VARIANT),auto)
+    ifeq ($(OS),Windows_NT)
+        CUDA_AVAILABLE := $(shell $(PS) "if (Get-Command nvcc -ErrorAction SilentlyContinue) { 'yes' }")
+    else ifneq ($(DETECTED_OS),Darwin)
+        CUDA_AVAILABLE := $(shell command -v nvcc 2>/dev/null)
+    endif
+    ifdef CUDA_AVAILABLE
+        ifeq ($(DETECTED_OS),Windows)
+            GPU_VARIANT := cuda12
+        else
+            GPU_VARIANT := vulkan
+        endif
+    else
+        GPU_VARIANT := cpu
     endif
 endif
+
+ifneq ($(DETECTED_OS),Darwin)
+
+ifeq ($(GPU_VARIANT),vulkan)
+    ifeq ($(OS),Windows_NT)
+        LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-win-vulkan-$(ARCH).zip
+    else
+        LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-ubuntu-vulkan-x64.tar.gz
+    endif
+    LLAMA_URL := https://github.com/ggml-org/llama.cpp/releases/download/$(LLAMA_VERSION)/$(LLAMA_ARCHIVE)
+else ifeq ($(GPU_VARIANT),rocm)
+    ifeq ($(OS),Windows_NT)
+        LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-win-hip-radeon-$(ARCH).zip
+    else
+        LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-ubuntu-rocm-7.2-x64.tar.gz
+    endif
+    LLAMA_URL := https://github.com/ggml-org/llama.cpp/releases/download/$(LLAMA_VERSION)/$(LLAMA_ARCHIVE)
+else ifeq ($(GPU_VARIANT),cuda12)
+    ifeq ($(OS),Windows_NT)
+        LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-win-cuda-12.4-$(ARCH).zip
+        CUDA_ARCHIVE := cudart-llama-bin-win-cuda-12.4-$(ARCH).zip
+        CUDA_URL := https://github.com/ggml-org/llama.cpp/releases/download/$(LLAMA_VERSION)/$(CUDA_ARCHIVE)
+    endif
+    LLAMA_URL := https://github.com/ggml-org/llama.cpp/releases/download/$(LLAMA_VERSION)/$(LLAMA_ARCHIVE)
+else ifeq ($(GPU_VARIANT),cuda13)
+    ifeq ($(OS),Windows_NT)
+        LLAMA_ARCHIVE := llama-$(LLAMA_VERSION)-bin-win-cuda-13.1-$(ARCH).zip
+        CUDA_ARCHIVE := cudart-llama-bin-win-cuda-13.1-$(ARCH).zip
+        CUDA_URL := https://github.com/ggml-org/llama.cpp/releases/download/$(LLAMA_VERSION)/$(CUDA_ARCHIVE)
+    endif
+    LLAMA_URL := https://github.com/ggml-org/llama.cpp/releases/download/$(LLAMA_VERSION)/$(LLAMA_ARCHIVE)
+endif
+
+endif
+
+# Export resolved GPU_VARIANT so docker compose and scripts can read it
+export GPU_VARIANT
+
+# Docker image tag suffix: always includes variant (e.g., latest-cpu, latest-vulkan)
+DOCKER_VARIANT_SUFFIX := -$(GPU_VARIANT)
 
 # =============================================================================
 # Main Targets
 # =============================================================================
 
-.PHONY: all prepare build clean help check-deps print-llama-version
+.PHONY: all prepare build clean clean-prepare clean-prepare-all help check-deps print-llama-version print-gpu-variant activate-variant
 .PHONY: download-binaries import-libs
 .PHONY: build-llamacppserver build-llamacppclienttest build-inferencetest1 build-inferencetest2
 .PHONY: run-llamacppserver run-baselinetest run-paralleltest run-backpressuretest run-inferencetest1 run-inferencetest2
@@ -141,12 +190,25 @@ all: prepare build
 	@echo "Executables built in cmd/*/."
 	@echo "Run with: make run-llamacppserver, make run-baselinetest, etc."
 
-prepare: download-binaries import-libs
+prepare: download-binaries import-libs activate-variant
 	@echo ""
 	@echo "=== Preparation Complete ==="
+	@echo "Active variant: $(GPU_VARIANT) ($(LLAMA_ACTIVE_DIR) -> $(LLAMA_DIR))"
 	@echo "You can now build with: make build"
 
-build: build-llamacppserver build-llamacppclienttest build-inferencetest1 build-inferencetest2
+# Point the stable CGO path (build/llama-binaries) to the active variant directory
+activate-variant:
+	@echo "Activating variant $(GPU_VARIANT)..."
+ifeq ($(OS),Windows_NT)
+	@$(PS) "if (Test-Path '$(LLAMA_ACTIVE_DIR)') { (Get-Item '$(LLAMA_ACTIVE_DIR)').Delete() }"
+	@$(PS) "New-Item -ItemType Junction -Path '$(LLAMA_ACTIVE_DIR)' -Target (Resolve-Path '$(LLAMA_DIR)').Path | Out-Null"
+else
+	@rm -f $(LLAMA_ACTIVE_DIR) 2>/dev/null || rm -rf $(LLAMA_ACTIVE_DIR) 2>/dev/null || true
+	@ln -sfn $(CURDIR)/$(LLAMA_DIR) $(LLAMA_ACTIVE_DIR)
+endif
+	@echo "  $(LLAMA_ACTIVE_DIR) -> $(LLAMA_DIR)"
+
+build: activate-variant build-llamacppserver build-llamacppclienttest build-inferencetest1 build-inferencetest2
 	@echo ""
 	@echo "=== All Go binaries built ==="
 
@@ -172,13 +234,13 @@ endif
 # =============================================================================
 
 download-binaries: check-deps
-	@echo "=== Downloading llama.cpp $(LLAMA_VERSION) binaries for $(DETECTED_OS) $(ARCH) ==="
+	@echo "=== Downloading llama.cpp $(LLAMA_VERSION) binaries for $(DETECTED_OS) $(ARCH) ($(GPU_VARIANT)) ==="
 	@echo "Binary URL: $(LLAMA_URL)"
 	@$(call MKDIR_P,$(LLAMA_DIR))
 ifeq ($(OS),Windows_NT)
 	$(PS) "Invoke-WebRequest -Uri '$(LLAMA_URL)' -OutFile '$(LLAMA_DIR)/$(LLAMA_ARCHIVE)'"
 	$(PS) "Expand-Archive -Path '$(LLAMA_DIR)/$(LLAMA_ARCHIVE)' -DestinationPath '$(LLAMA_DIR)' -Force"
-ifdef CUDA_AVAILABLE
+ifdef CUDA_ARCHIVE
 	@echo "Downloading CUDA runtime: $(CUDA_URL)"
 	$(PS) "Invoke-WebRequest -Uri '$(CUDA_URL)' -OutFile '$(LLAMA_DIR)/$(CUDA_ARCHIVE)'"
 	$(PS) "Expand-Archive -Path '$(LLAMA_DIR)/$(CUDA_ARCHIVE)' -DestinationPath '$(LLAMA_DIR)' -Force"
@@ -459,7 +521,10 @@ endif
 # =============================================================================
 
 clean:
-	@echo "Cleaning build artifacts..."
+	@echo "Cleaning all build artifacts..."
+ifeq ($(OS),Windows_NT)
+	@$(PS) "if (Test-Path '$(LLAMA_ACTIVE_DIR)') { (Get-Item '$(LLAMA_ACTIVE_DIR)').Delete() }"
+endif
 	@$(call RM_RF,$(BUILD_DIR))
 	@$(call RM_F,cmd/llamacppserver/llamacppserver$(EXE))
 	@$(call RM_F,cmd/llamacppclienttest/llamacppclienttest$(EXE))
@@ -482,6 +547,29 @@ else
 endif
 	@echo "Clean complete."
 
+clean-prepare:
+	@echo "Cleaning prepared llama.cpp binaries for variant: $(GPU_VARIANT)..."
+	@$(call RM_RF,$(LLAMA_DIR))
+ifeq ($(OS),Windows_NT)
+	@$(PS) "if ((Test-Path '$(LLAMA_ACTIVE_DIR)') -and ((Get-Item '$(LLAMA_ACTIVE_DIR)').Target -match '$(GPU_VARIANT)$$')) { (Get-Item '$(LLAMA_ACTIVE_DIR)').Delete(); Write-Host 'Removed stale junction $(LLAMA_ACTIVE_DIR)' }"
+else
+	@if [ -L "$(LLAMA_ACTIVE_DIR)" ] && readlink "$(LLAMA_ACTIVE_DIR)" | grep -q '$(GPU_VARIANT)$$'; then \
+		rm -f "$(LLAMA_ACTIVE_DIR)"; echo "Removed stale symlink $(LLAMA_ACTIVE_DIR)"; \
+	fi
+endif
+	@echo "Removed $(LLAMA_DIR)"
+
+clean-prepare-all:
+	@echo "Cleaning prepared llama.cpp binaries for ALL variants..."
+ifeq ($(OS),Windows_NT)
+	@$(PS) "if (Test-Path '$(LLAMA_ACTIVE_DIR)') { (Get-Item '$(LLAMA_ACTIVE_DIR)').Delete() }"
+	-$(PS) "Get-ChildItem -Directory -Path '$(BUILD_DIR)' -Filter 'llama-binaries-*' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force"
+else
+	@rm -f $(LLAMA_ACTIVE_DIR) 2>/dev/null || true
+	-rm -rf $(BUILD_DIR)/llama-binaries-* 2>/dev/null || true
+endif
+	@echo "All variant binaries removed."
+
 # =============================================================================
 # Help
 # =============================================================================
@@ -495,7 +583,9 @@ help:
 	@echo "  make all              - Full build (prepare + build all Go binaries)"
 	@echo "  make prepare          - Download binaries + generate import libs"
 	@echo "  make build            - Build all Go binaries"
-	@echo "  make clean            - Remove all build artifacts"
+	@echo "  make clean            - Remove all build artifacts (all variants)"
+	@echo "  make clean-prepare    - Remove downloaded binaries for current GPU_VARIANT"
+	@echo "  make clean-prepare-all - Remove downloaded binaries for ALL variants"
 	@echo ""
 	@echo "Individual build targets:"
 	@echo "  make build-llamacppserver  - Build llamacpp server"
@@ -513,7 +603,7 @@ help:
 	@echo ""
 	@echo "Docker targets:"
 	@echo "  make docker-build                            - Build all Docker images"
-	@echo "  make docker-build-server                     - Build server Docker image"
+	@echo "  make docker-build-server                     - Build server image (tag: latest-<variant>)"
 	@echo "  make docker-build-client                     - Build client Docker image"
 	@echo "  make docker-integration-test MODEL_PATH=<path> - Run integration test with local model"
 	@echo "  make docker-integration-test-ci              - Run integration test (downloads model)"
@@ -521,6 +611,7 @@ help:
 	@echo ""
 	@echo "Configuration variables:"
 	@echo "  LLAMA_VERSION  	- llama.cpp version (default: $(LLAMA_VERSION))"
+	@echo "  GPU_VARIANT    	- GPU variant: auto, cpu, vulkan, rocm, cuda12, cuda13 (resolved: $(GPU_VARIANT))"
 	@echo "  GRPC_PORT      	- gRPC server port (default: $(GRPC_PORT))"
 	@echo "  HTTP_PORT      	- HTTP+SSE server port (default: disabled)"
 	@echo "  ATTACH_PORT    	- Client test port, 0 = spawn server (default: $(ATTACH_PORT))"
@@ -533,23 +624,30 @@ help:
 	@echo "Detected environment:"
 	@echo "  OS: $(DETECTED_OS)"
 	@echo "  Architecture: $(ARCH)"
-	@echo "  CUDA: $(if $(CUDA_AVAILABLE),Available,Not available)"
+	@echo "  GPU variant: $(GPU_VARIANT)"
+	@echo "  Binary archive: $(LLAMA_ARCHIVE)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make all"
+	@echo "  make all GPU_VARIANT=vulkan"
 	@echo "  make run-llamacppserver GRPC_PORT=50053"
 	@echo "  make run-llamacppserver HTTP_PORT=8083"
 	@echo "  make run-llamacppserver GRPC_PORT=50053 HTTP_PORT=8083"
 	@echo "  make run-baselinetest MODEL_PATH=/path/to/model.gguf"
 	@echo "  make run-paralleltest MODEL_PATH=/path/to/model.gguf PARALLEL_N=8"
 	@echo "  make run-backpressuretest MODEL_PATH=/path/to/model.gguf PARALLEL_N=4"
+	@echo "  make clean-prepare GPU_VARIANT=vulkan"
 	@echo "  make LLAMA_VERSION=b6800 prepare"
+	@echo "  make docker-build-server GPU_VARIANT=vulkan"
 	@echo "  make docker-integration-test MODEL_PATH=/path/to/model.gguf"
 	@echo "  make docker-integration-test-ci"
 	@echo "  make docker-build DOCKER_NO_CACHE=1"
 
 print-llama-version:
 	@echo $(LLAMA_VERSION)
+
+print-gpu-variant:
+	@echo $(GPU_VARIANT)
 
 # =============================================================================
 # Docker Targets
@@ -571,14 +669,15 @@ docker-build: docker-build-server docker-build-client
 	@echo "=== All Docker images built ==="
 
 docker-build-server:
-	@echo "Building llamacpp server Docker image..."
-	docker build -f docker/Dockerfile.server -t llamacpp-server:$(IMAGE_TAG) \
-		--build-arg LLAMA_VERSION=$(LLAMA_VERSION) $(DOCKER_BUILD_FLAGS) .
+	@echo "Building llamacpp server Docker image (GPU_VARIANT=$(GPU_VARIANT))..."
+	docker build -f docker/Dockerfile.server -t llamacpp-server:$(IMAGE_TAG)$(DOCKER_VARIANT_SUFFIX) \
+		--build-arg LLAMA_VERSION=$(LLAMA_VERSION) \
+		--build-arg GPU_VARIANT=$(GPU_VARIANT) $(DOCKER_BUILD_FLAGS) .
 
 docker-build-client:
 	@echo "Building llamacpp client Docker image..."
 	docker build -f docker/Dockerfile.client -t llamacpp-client:$(IMAGE_TAG) \
-		--build-arg LLAMA_VERSION=$(LLAMA_VERSION) $(DOCKER_BUILD_FLAGS) .
+		$(DOCKER_BUILD_FLAGS) .
 
 docker-integration-test:
 ifeq ($(MODEL_PATH),)
@@ -608,6 +707,9 @@ docker-clean:
 	@echo "Cleaning up Docker resources..."
 	-docker compose -f docker/docker-compose.yml down -v --remove-orphans 2>/dev/null || true
 	-docker compose -f docker/docker-compose.ci.yml down -v --remove-orphans 2>/dev/null || true
-	-docker rmi llamacpp-server:$(IMAGE_TAG) llamacpp-client:$(IMAGE_TAG) 2>/dev/null || true
-	-docker rmi llamacpp-server:$(IMAGE_TAG_CI) llamacpp-client:$(IMAGE_TAG_CI) 2>/dev/null || true
+	-docker rmi llamacpp-client:$(IMAGE_TAG) llamacpp-client:$(IMAGE_TAG_CI) 2>/dev/null || true
+	-docker rmi llamacpp-server:$(IMAGE_TAG)-cpu llamacpp-server:$(IMAGE_TAG)-vulkan 2>/dev/null || true
+	-docker rmi llamacpp-server:$(IMAGE_TAG)-rocm llamacpp-server:$(IMAGE_TAG)-cuda12 llamacpp-server:$(IMAGE_TAG)-cuda13 2>/dev/null || true
+	-docker rmi llamacpp-server:$(IMAGE_TAG_CI)-cpu llamacpp-server:$(IMAGE_TAG_CI)-vulkan 2>/dev/null || true
+	-docker rmi llamacpp-server:$(IMAGE_TAG_CI)-rocm llamacpp-server:$(IMAGE_TAG_CI)-cuda12 llamacpp-server:$(IMAGE_TAG_CI)-cuda13 2>/dev/null || true
 	@echo "Docker cleanup complete."

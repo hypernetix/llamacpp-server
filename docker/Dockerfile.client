@@ -1,21 +1,16 @@
-# Multi-stage Dockerfile for llamacpp llamacpp client test
+# Multi-stage Dockerfile for llamacpp client test
 # Used for integration testing against a remote llamacpp server
 #
-# Uses the project Makefile for consistent build process
+# The client binary does NOT use CGO or llama.cpp bindings — it communicates
+# with the server purely via gRPC or HTTP. No make prepare needed.
 #
 # Build: docker build -f docker/Dockerfile.client -t llamacpp-client .
 # Run:   docker run --network host llamacpp-client --host server --port 50051 --transport grpc --model /models/model.gguf
 
 # =============================================================================
-# Stage 1: Build Go binary using Makefile
+# Stage 1: Build Go binary
 # =============================================================================
 FROM golang:1.22-bookworm AS builder
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    make \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -26,44 +21,22 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# The client needs llama.cpp binaries because it shares code with bindings
-# Use Makefile to prepare them
-ARG LLAMA_VERSION
-ENV LLAMA_VERSION=${LLAMA_VERSION}
-RUN make prepare LLAMA_VERSION=${LLAMA_VERSION}
-
-# Build the client test binary using Makefile
-RUN make build-llamacppclienttest
+# Build the client test binary (pure Go, no CGO)
+RUN CGO_ENABLED=0 go build -v -o llamacppclienttest ./cmd/llamacppclienttest
 
 # =============================================================================
-# Stage 2: Runtime image
+# Stage 2: Minimal runtime image
 # =============================================================================
 FROM debian:bookworm-slim AS runtime
 
-# Install minimal runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
-    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Copy the binary
-COPY --from=builder /app/cmd/llamacppclienttest/llamacppclienttest /app/
-
-# Copy ALL shared libraries from the lib directory
-COPY --from=builder /app/build/llama-binaries/lib/ /app/
-
-# Create symlinks if needed
-RUN if [ -f "/app/libggml-cpu-x64.so" ] && [ ! -e "/app/libggml-cpu.so" ]; then \
-        ln -sf libggml-cpu-x64.so /app/libggml-cpu.so; \
-    fi
-
-# Register libraries with ldconfig
-RUN echo "/app" > /etc/ld.so.conf.d/llamacpp.conf && ldconfig
-
-# Also set LD_LIBRARY_PATH as backup
-ENV LD_LIBRARY_PATH="/app"
+COPY --from=builder /app/llamacppclienttest /app/
 
 # Create models directory (for model path reference)
 RUN mkdir -p /models
