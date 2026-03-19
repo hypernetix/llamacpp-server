@@ -78,6 +78,11 @@ Features that llama.cpp supports but are not yet wired through:
   (useful for RAG pipelines)
 - **Grammar-constrained generation** — GBNF grammars for structured output
   (JSON mode, function calling, etc.)
+- **LoRA adapter support** — load and swap LoRA adapters at runtime for
+  fine-tuned model variants without reloading the base model
+- **Model-native chat templates** — read the chat template from GGUF metadata
+  instead of hardcoding ChatML, enabling correct formatting for any
+  instruction-tuned model
 
 ## 5. Multi-Model Improvements
 
