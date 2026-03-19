@@ -1,11 +1,12 @@
 # llama.cpp Go Server
 
 A Go server for running Large Language Models locally using **llama.cpp** with
-dual **gRPC** and **HTTP+SSE** interfaces.
+**gRPC**, **HTTP+SSE**, and **OpenAI-compatible** interfaces.
 
 ## Features
 
-- **Dual API**: gRPC (Protobuf streaming) and HTTP+SSE interfaces — use either or both simultaneously
+- **Triple API**: gRPC (Protobuf streaming), HTTP+SSE, and OpenAI-compatible (`/v1/chat/completions`, `/v1/completions`, `/v1/models`) — use any or all simultaneously
+- **OpenAI SDK Drop-in**: Works with the Python `openai` library, LangChain, LiteLLM, and any OpenAI-compatible client
 - **Streaming Inference**: Real-time token-by-token generation via gRPC server streaming or Server-Sent Events
 - **Continuous Batching**: Shared-context inference engine that processes multiple concurrent requests in a single batched forward pass
 - **Parallel Inference Slots**: Configurable `--n-parallel` to serve multiple requests concurrently with efficient KV cache sharing
@@ -33,6 +34,9 @@ make docker-integration-test MODEL_PATH=/path/to/your/model.gguf
 
 # Or run CI-style test (downloads a small test model automatically)
 make docker-integration-test-ci
+
+# Run OpenAI-compatible API test (downloads model, tests with Python OpenAI SDK)
+make docker-openai-test
 ```
 
 ## Prerequisites
@@ -129,6 +133,7 @@ make run-inferencetest2 MODEL_PATH=/path/to/model.gguf
 | `make docker-build-client` | Build client test Docker image |
 | `make docker-integration-test MODEL_PATH=<path>` | Run integration test with local model |
 | `make docker-integration-test-ci` | Run integration test (downloads test model) |
+| `make docker-openai-test` | Run OpenAI-compatible API test (downloads model, uses Python OpenAI SDK) |
 | `make docker-clean` | Remove Docker images and volumes |
 
 ### Configuration Variables
@@ -169,7 +174,8 @@ make docker-build LLAMA_VERSION=b6800
 │   │   ├── llmserver.pb.go     # Generated Go code
 │   │   └── llmserver_grpc.pb.go
 │   └── http/                   # HTTP+SSE API definition
-│       └── openapi.yaml        # OpenAPI 3.1 specification
+│       ├── openapi.yaml        # OpenAPI 3.1 specification (custom API)
+│       └── openapi-v1.yaml     # OpenAPI 3.1 specification (OpenAI-compatible API)
 ├── cmd/
 │   ├── llamacppserver/         # Server application (gRPC + HTTP)
 │   ├── llamacppclienttest/     # Client test tool (gRPC + HTTP)
@@ -188,10 +194,13 @@ make docker-build LLAMA_VERSION=b6800
 │   ├── Dockerfile.server       # Server Docker image
 │   ├── Dockerfile.client       # Client test Docker image
 │   ├── docker-compose.yml      # Local integration testing
-│   └── docker-compose.ci.yml   # CI integration testing
+│   ├── docker-compose.ci.yml   # CI integration testing
+│   └── docker-compose.openai-test.yml  # OpenAI API compatibility testing
 ├── scripts/
 │   ├── integration-test.sh     # Integration test runner (Linux/macOS)
 │   └── integration-test.ps1   # Integration test runner (Windows)
+├── tests/
+│   └── openai-compat/          # OpenAI SDK integration test (Python)
 ├── docs/
 │   ├── PARALLELISM.md          # Parallelism modes and comparison with other solutions
 │   └── CONTINUOUS_BATCHING.md  # Continuous batching architecture and benchmarks
@@ -288,7 +297,39 @@ make run-baselinetest MODEL_PATH=/path/to/model.gguf
 
 ## API Documentation
 
-The server exposes two equivalent interfaces. Both share the same inference engine and model state.
+The server exposes three interfaces. All share the same inference engine and model state.
+
+### OpenAI-Compatible API
+
+Defined in [`api/http/openapi-v1.yaml`](api/http/openapi-v1.yaml) (OpenAPI 3.1).
+
+Drop-in compatible with the OpenAI Python SDK, LangChain, LiteLLM, and any
+OpenAI-compatible client. No API key required (the `Authorization` header is
+accepted but ignored).
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/models` | `GET` | List loaded models |
+| `/v1/completions` | `POST` | Text completion — streaming (SSE) or non-streaming |
+| `/v1/chat/completions` | `POST` | Chat completion — streaming (SSE) or non-streaming |
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8082/v1", api_key="not-needed")
+
+# Load a model first (via the custom endpoint)
+import requests
+requests.post("http://localhost:8082/models/load", json={"path": "/path/to/model.gguf"})
+
+# Then use the OpenAI SDK as usual
+response = client.chat.completions.create(
+    model="/path/to/model.gguf",
+    messages=[{"role": "user", "content": "Hello!"}],
+    max_tokens=100,
+)
+print(response.choices[0].message.content)
+```
 
 ### gRPC API
 
@@ -300,7 +341,7 @@ Defined in [`api/proto/llmserver.proto`](api/proto/llmserver.proto).
 | `LoadModel` | Load a GGUF model with streaming progress |
 | `Predict` | Generate text with streaming token output |
 
-### HTTP+SSE API
+### Custom HTTP+SSE API
 
 Defined in [`api/http/openapi.yaml`](api/http/openapi.yaml) (OpenAPI 3.1).
 
@@ -446,6 +487,7 @@ This ensures Docker builds are identical to local builds.
 - [Continuous Batching](docs/CONTINUOUS_BATCHING.md) — shared-context architecture, benchmarks, and future work
 - [Roadmap](docs/ROADMAP.md) — planned features and development directions
 - [GPU Build Strategy](docs/GPU_BUILD_STRATEGY.md) — GPU variant builds, Docker images, and CI matrix
+- [Go vs Rust Comparison](docs/go-vs-rust-llama-cpp-comparison.md) — feature comparison with Rust llama.cpp bindings
 
 ## CI/CD
 
