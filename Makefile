@@ -182,7 +182,7 @@ DOCKER_VARIANT_SUFFIX := -$(GPU_VARIANT)
 .PHONY: run-llamacppserver run-baselinetest run-paralleltest run-backpressuretest run-inferencetest1 run-inferencetest2
 .PHONY: copy-dlls-llamacppserver copy-dlls-llamacppclienttest copy-dlls-inferencetest1 copy-dlls-inferencetest2
 .PHONY: docker-build docker-build-server docker-build-client
-.PHONY: docker-integration-test docker-integration-test-ci docker-clean
+.PHONY: docker-integration-test docker-integration-test-ci docker-openai-test docker-clean
 
 all: prepare build
 	@echo ""
@@ -607,6 +607,7 @@ help:
 	@echo "  make docker-build-client                     - Build client Docker image"
 	@echo "  make docker-integration-test MODEL_PATH=<path> - Run integration test with local model"
 	@echo "  make docker-integration-test-ci              - Run integration test (downloads model)"
+	@echo "  make docker-openai-test                      - Run OpenAI-compatible API test (downloads model)"
 	@echo "  make docker-clean                            - Remove Docker images and volumes"
 	@echo ""
 	@echo "Configuration variables:"
@@ -703,13 +704,29 @@ else
 	./scripts/integration-test.sh --ci
 endif
 
+docker-openai-test:
+	@echo ""
+	@echo "=== Running OpenAI-Compatible API Test ==="
+	@echo "--- Downloading model ---"
+	LLAMA_VERSION=$(LLAMA_VERSION) GPU_VARIANT=$(GPU_VARIANT) \
+		docker compose -f docker/docker-compose.openai-test.yml --profile setup run --rm model-downloader
+	@echo "--- Running tests ---"
+	LLAMA_VERSION=$(LLAMA_VERSION) GPU_VARIANT=$(GPU_VARIANT) \
+		docker compose -f docker/docker-compose.openai-test.yml up --build --exit-code-from openai-test
+	@echo "=== OpenAI-Compatible API Test Complete ==="
+
+docker-openai-test-clean:
+	-docker compose -f docker/docker-compose.openai-test.yml --profile setup down -v --remove-orphans 2>/dev/null || true
+
 docker-clean:
 	@echo "Cleaning up Docker resources..."
 	-docker compose -f docker/docker-compose.yml down -v --remove-orphans 2>/dev/null || true
 	-docker compose -f docker/docker-compose.ci.yml down -v --remove-orphans 2>/dev/null || true
+	-docker compose -f docker/docker-compose.openai-test.yml --profile setup down -v --remove-orphans 2>/dev/null || true
 	-docker rmi llamacpp-client:$(IMAGE_TAG) llamacpp-client:$(IMAGE_TAG_CI) 2>/dev/null || true
 	-docker rmi llamacpp-server:$(IMAGE_TAG)-cpu llamacpp-server:$(IMAGE_TAG)-vulkan 2>/dev/null || true
 	-docker rmi llamacpp-server:$(IMAGE_TAG)-rocm llamacpp-server:$(IMAGE_TAG)-cuda12 llamacpp-server:$(IMAGE_TAG)-cuda13 2>/dev/null || true
 	-docker rmi llamacpp-server:$(IMAGE_TAG_CI)-cpu llamacpp-server:$(IMAGE_TAG_CI)-vulkan 2>/dev/null || true
 	-docker rmi llamacpp-server:$(IMAGE_TAG_CI)-rocm llamacpp-server:$(IMAGE_TAG_CI)-cuda12 llamacpp-server:$(IMAGE_TAG_CI)-cuda13 2>/dev/null || true
+	-docker rmi llamacpp-server:openai-test-cpu llamacpp-openai-test:$(IMAGE_TAG) 2>/dev/null || true
 	@echo "Docker cleanup complete."

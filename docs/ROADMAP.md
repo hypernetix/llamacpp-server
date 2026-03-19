@@ -1,12 +1,14 @@
 # Roadmap
 
-Current state: the project supports dual gRPC + HTTP/SSE APIs, continuous batching
-with multi-slot parallelism, pipeline and tensor parallelism, flash attention,
-cross-platform builds (Windows/Linux/macOS), Docker CI/CD, and comprehensive
-test coverage (baseline, greedy, seeded, stress, parallel, backpressure).
+Current state: the project supports dual gRPC + HTTP/SSE APIs, an
+OpenAI-compatible API (`/v1/chat/completions`, `/v1/completions`, `/v1/models`),
+continuous batching with multi-slot parallelism, pipeline and tensor parallelism,
+flash attention, cross-platform builds (Windows/Linux/macOS), Docker CI/CD, and
+comprehensive test coverage (baseline, greedy, seeded, stress, parallel,
+backpressure, OpenAI SDK compatibility).
 It is production-ready for CPU inference.
 
-The next development directions focus on GPU support, API compatibility, and
+The next development directions focus on GPU support, API refinements, and
 production operations.
 
 ---
@@ -30,20 +32,26 @@ GPU inference:
 See [GPU_BUILD_STRATEGY.md](GPU_BUILD_STRATEGY.md) for the build matrix and
 Docker variant strategy.
 
-## 2. OpenAI-Compatible API
+## 2. OpenAI-Compatible API ✅
 
-The current HTTP API works but uses a custom schema. An OpenAI-compatible layer
-would enable drop-in use with existing client libraries:
+Implemented. The server now exposes an OpenAI-compatible API alongside the
+custom HTTP+SSE and gRPC interfaces:
 
 - **`/v1/chat/completions`** — chat messages format, streaming via SSE with
-  `choices[].delta`
-- **`/v1/completions`** — raw completions (close to what already exists)
+  `choices[].delta`, ChatML template applied to messages
+- **`/v1/completions`** — raw text completions (streaming and non-streaming)
 - **`/v1/models`** — list loaded models
-- **Stop sequences** and **logprobs** — commonly used by client SDKs
 
-This would let any OpenAI SDK client (Python `openai`, LangChain, LiteLLM, etc.)
-connect directly. The `llmservice` layer already has the inference logic; it is
-mostly API surface and response format work.
+Tested end-to-end with the Python `openai` SDK via Docker
+(`make docker-openai-test`). API spec in `api/http/openapi-v1.yaml`.
+
+**Remaining items for future iterations:**
+
+- **Stop sequences** — the `stop` parameter is accepted for compatibility but
+  not yet enforced by the inference engine
+- **Logprobs** — not yet implemented
+- **Usage / token counting** — `usage` in responses currently returns zeros;
+  accurate prompt and completion token counts require engine-level tracking
 
 ## 3. Observability & Production Operations
 
@@ -103,7 +111,8 @@ this has never been tested and has no resource governance:
 
 | Phase | Focus | Rationale |
 |-------|-------|-----------|
+| **Done** | OpenAI-compatible API ✅ | Drop-in SDK compatibility achieved |
 | **Next** | GPU Docker (CUDA + Vulkan) | Unlocks real production use cases |
-| **Then** | OpenAI-compatible API | Highest adoption impact, moderate effort |
 | **Then** | Prometheus metrics | Essential for operating in production |
+| **Then** | OpenAI API refinements (stop, logprobs, usage) | Completes SDK parity |
 | **Later** | Advanced features, multi-model, K8s | Driven by user demand |

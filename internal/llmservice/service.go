@@ -81,6 +81,10 @@ func (s *Service) Predict(modelPath string, prompt string, args inferenceengine.
 	return s.predictionsManager.Predict(md.Model, prompt, args, stream)
 }
 
+func (s *Service) ListModels() []string {
+	return s.modelManager.ListModels()
+}
+
 func (s *Service) Stop() {
 	s.predictionsManager.Stop()
 	s.modelManager.Stop()

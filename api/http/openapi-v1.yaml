@@ -1,0 +1,453 @@
+openapi: 3.1.0
+info:
+  title: llamacpp-server OpenAI-Compatible API
+  version: 1.0.0
+  description: |
+    OpenAI-compatible REST API for the llamacpp-server. Implements a subset of
+    the OpenAI API specification, enabling drop-in use with OpenAI client SDKs
+    (Python `openai`, LangChain, LiteLLM, etc.).
+
+    **Supported endpoints:**
+    - `GET /v1/models` — list loaded models
+    - `POST /v1/completions` — text completions (streaming and non-streaming)
+    - `POST /v1/chat/completions` — chat completions (streaming and non-streaming)
+
+    **Model loading:** Models must be loaded before inference using the custom
+    `POST /models/load` endpoint (see `openapi.yaml`). The OpenAI API does not
+    define a model loading mechanism.
+
+    **Chat template:** Chat messages are formatted using the ChatML template,
+    which is compatible with most instruction-tuned models (SmolLM2-Instruct,
+    Qwen, Mistral-Instruct, etc.).
+
+    **Authentication:** No API key is required. The `Authorization` header is
+    accepted but ignored, so OpenAI SDKs can be configured with any placeholder
+    key (e.g., `api_key="not-needed"`).
+
+    This API runs alongside the custom HTTP+SSE API and the gRPC interface.
+    All interfaces share the same inference engine and model state.
+
+servers:
+  - url: http://localhost:8082/v1
+    description: Default local server
+
+paths:
+  /v1/models:
+    get:
+      operationId: listModels
+      summary: List loaded models
+      description: |
+        Returns a list of all currently loaded models. Each model's `id` is the
+        filesystem path that was used to load it via `POST /models/load`.
+      responses:
+        "200":
+          description: Model list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelList"
+              examples:
+                one-model:
+                  summary: Single loaded model
+                  value:
+                    object: list
+                    data:
+                      - id: /models/SmolLM2-135M-Instruct-Q4_K_M.gguf
+                        object: model
+                        created: 1711000000
+                        owned_by: local
+
+  /v1/completions:
+    post:
+      operationId: createCompletion
+      summary: Create a text completion
+      description: |
+        Generates text from a raw prompt. Supports both streaming (SSE) and
+        non-streaming modes.
+
+        When `stream: true`, the response is an SSE stream where each `data:`
+        line contains a JSON completion chunk. The stream ends with
+        `data: [DONE]`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompletionRequest"
+      responses:
+        "200":
+          description: |
+            Non-streaming: a single JSON response.
+            Streaming: an SSE stream of completion chunks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompletionResponse"
+              examples:
+                non-streaming:
+                  summary: Non-streaming response
+                  value:
+                    id: cmpl-abc123
+                    object: text_completion
+                    created: 1711000000
+                    model: /models/SmolLM2-135M-Instruct-Q4_K_M.gguf
+                    choices:
+                      - text: " Paris, the City of Light."
+                        index: 0
+                        finish_reason: stop
+                    usage:
+                      prompt_tokens: 0
+                      completion_tokens: 0
+                      total_tokens: 0
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE stream of CompletionResponse chunks, ending with `data: [DONE]`.
+              examples:
+                streaming:
+                  summary: Streaming token-by-token
+                  value: |
+                    data: {"id":"cmpl-abc123","object":"text_completion","created":1711000000,"model":"/models/model.gguf","choices":[{"text":" Paris","index":0,"finish_reason":null}]}
+
+                    data: {"id":"cmpl-abc123","object":"text_completion","created":1711000000,"model":"/models/model.gguf","choices":[{"text":"","index":0,"finish_reason":"stop"}]}
+
+                    data: [DONE]
+        "400":
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Inference failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/chat/completions:
+    post:
+      operationId: createChatCompletion
+      summary: Create a chat completion
+      description: |
+        Generates a chat response from a list of messages. Messages are
+        converted to a prompt using the ChatML template before inference.
+
+        Supports both streaming (SSE) and non-streaming modes.
+
+        When `stream: true`, the response is an SSE stream. The first chunk
+        contains `delta.role = "assistant"`. Subsequent chunks contain
+        `delta.content` with generated tokens. The final chunk has
+        `finish_reason = "stop"` and an empty delta. The stream ends with
+        `data: [DONE]`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatCompletionRequest"
+      responses:
+        "200":
+          description: |
+            Non-streaming: a single JSON response.
+            Streaming: an SSE stream of chat completion chunks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatCompletionResponse"
+              examples:
+                non-streaming:
+                  summary: Non-streaming response
+                  value:
+                    id: chatcmpl-abc123
+                    object: chat.completion
+                    created: 1711000000
+                    model: /models/SmolLM2-135M-Instruct-Q4_K_M.gguf
+                    choices:
+                      - index: 0
+                        message:
+                          role: assistant
+                          content: "The capital of France is Paris."
+                        finish_reason: stop
+                    usage:
+                      prompt_tokens: 0
+                      completion_tokens: 0
+                      total_tokens: 0
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE stream of ChatCompletionResponse chunks, ending with `data: [DONE]`.
+              examples:
+                streaming:
+                  summary: Streaming chat response
+                  value: |
+                    data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1711000000,"model":"/models/model.gguf","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+                    data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1711000000,"model":"/models/model.gguf","choices":[{"index":0,"delta":{"content":"The"},"finish_reason":null}]}
+
+                    data: {"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1711000000,"model":"/models/model.gguf","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+                    data: [DONE]
+        "400":
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Inference failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    ModelList:
+      type: object
+      properties:
+        object:
+          type: string
+          enum: [list]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Model"
+
+    Model:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Model identifier (filesystem path used during loading).
+          example: /models/SmolLM2-135M-Instruct-Q4_K_M.gguf
+        object:
+          type: string
+          enum: [model]
+        created:
+          type: integer
+          format: int64
+          description: Unix timestamp.
+        owned_by:
+          type: string
+          description: Always "local" for locally loaded models.
+          example: local
+
+    CompletionRequest:
+      type: object
+      required:
+        - model
+        - prompt
+      properties:
+        model:
+          type: string
+          description: Model ID (path returned by `/v1/models`).
+          example: /models/SmolLM2-135M-Instruct-Q4_K_M.gguf
+        prompt:
+          type: string
+          description: The prompt to generate completions for.
+          example: "The capital of France is"
+        max_tokens:
+          type: integer
+          default: 16
+          description: Maximum number of tokens to generate.
+          example: 50
+        temperature:
+          type: number
+          format: float
+          description: Sampling temperature. 0 = greedy.
+          example: 0.7
+        top_p:
+          type: number
+          format: float
+          description: Nucleus sampling threshold.
+          example: 0.95
+        stream:
+          type: boolean
+          default: false
+          description: Stream tokens via SSE.
+        stop:
+          description: |
+            Stop sequences (accepted for compatibility but not yet implemented).
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+
+    CompletionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cmpl-abc123
+        object:
+          type: string
+          enum: [text_completion]
+        created:
+          type: integer
+          format: int64
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompletionChoice"
+        usage:
+          $ref: "#/components/schemas/Usage"
+
+    CompletionChoice:
+      type: object
+      properties:
+        text:
+          type: string
+        index:
+          type: integer
+        finish_reason:
+          type: string
+          nullable: true
+          enum: [stop, length, null]
+
+    ChatCompletionRequest:
+      type: object
+      required:
+        - model
+        - messages
+      properties:
+        model:
+          type: string
+          description: Model ID (path returned by `/v1/models`).
+          example: /models/SmolLM2-135M-Instruct-Q4_K_M.gguf
+        messages:
+          type: array
+          description: Chat messages in OpenAI format.
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+          minItems: 1
+          example:
+            - role: user
+              content: "What is the capital of France?"
+        max_tokens:
+          type: integer
+          default: 256
+          description: Maximum number of tokens to generate.
+          example: 100
+        temperature:
+          type: number
+          format: float
+          description: Sampling temperature. 0 = greedy.
+          example: 0.7
+        top_p:
+          type: number
+          format: float
+          description: Nucleus sampling threshold.
+          example: 0.95
+        stream:
+          type: boolean
+          default: false
+          description: Stream tokens via SSE.
+        stop:
+          description: |
+            Stop sequences (accepted for compatibility but not yet implemented).
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+
+    ChatCompletionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: chatcmpl-abc123
+        object:
+          type: string
+          enum: [chat.completion, chat.completion.chunk]
+        created:
+          type: integer
+          format: int64
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatCompletionChoice"
+        usage:
+          $ref: "#/components/schemas/Usage"
+
+    ChatCompletionChoice:
+      type: object
+      properties:
+        index:
+          type: integer
+        message:
+          $ref: "#/components/schemas/ChatChoiceMessage"
+          description: Present in non-streaming responses.
+        delta:
+          $ref: "#/components/schemas/ChatChoiceDelta"
+          description: Present in streaming chunks.
+        finish_reason:
+          type: string
+          nullable: true
+          enum: [stop, length, null]
+
+    ChatMessage:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum: [system, user, assistant]
+        content:
+          type: string
+
+    ChatChoiceMessage:
+      type: object
+      properties:
+        role:
+          type: string
+        content:
+          type: string
+
+    ChatChoiceDelta:
+      type: object
+      description: Partial message in streaming mode.
+      properties:
+        role:
+          type: string
+        content:
+          type: string
+
+    Usage:
+      type: object
+      description: |
+        Token usage statistics. Currently returns zeros; accurate token
+        counting is planned for a future release.
+      properties:
+        prompt_tokens:
+          type: integer
+        completion_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+            type:
+              type: string
+              example: invalid_request_error
+            param:
+              type: string
+              nullable: true
+            code:
+              type: string
+              nullable: true

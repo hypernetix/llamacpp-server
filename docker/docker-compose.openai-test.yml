@@ -1,0 +1,100 @@
+# Docker Compose for OpenAI-Compatible API integration test
+#
+# Tests the /v1/ endpoints using the official Python OpenAI SDK.
+# Downloads the test model automatically, loads it, then runs all tests.
+#
+# Usage (via make — recommended):
+#   make docker-openai-test
+#
+# Manual usage:
+#   # Step 1: Download model into shared volume
+#   docker compose -f docker/docker-compose.openai-test.yml --profile setup run --rm model-downloader
+#   # Step 2: Build and run tests
+#   docker compose -f docker/docker-compose.openai-test.yml up --build --exit-code-from openai-test
+#
+# Environment variables:
+#   LLAMA_VERSION   - llama.cpp version (required — set via env or use make)
+#   GPU_VARIANT     - GPU variant (default: cpu)
+#   MODEL_URL       - URL to download the GGUF model
+#   MODEL_NAME      - Filename of the model
+#
+# The test:
+# 1. Downloads SmolLM2-135M-Instruct (tiny model, ~100MB)
+# 2. Starts the server with gRPC disabled, HTTP on port 8080
+# 3. Runs the Python test client which:
+#    a. Loads the model via POST /models/load (custom endpoint)
+#    b. Tests GET /v1/models
+#    c. Tests POST /v1/completions (non-streaming and streaming)
+#    d. Tests POST /v1/chat/completions (non-streaming and streaming)
+#    e. Tests error handling
+
+x-model-container-path: &model-container-path /models/model.gguf
+
+services:
+  # Init container: Download test model (run separately via --profile setup)
+  model-downloader:
+    profiles: ["setup"]
+    image: alpine:latest
+    container_name: openai-test-model-downloader
+    volumes:
+      - model-data:/models
+    environment:
+      - MODEL_URL=${MODEL_URL:-https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf}
+      - MODEL_NAME=${MODEL_NAME:-SmolLM2-135M-Instruct-Q4_K_M.gguf}
+    command: >
+      sh -c '
+        apk add --no-cache curl > /dev/null 2>&1 &&
+        if [ -f "/models/$${MODEL_NAME}" ]; then
+          echo "Model already exists: /models/$${MODEL_NAME}"
+          ls -la /models/
+        else
+          echo "Downloading model: $${MODEL_NAME}..."
+          curl -L --retry 3 --retry-delay 5 -o "/models/$${MODEL_NAME}" "$${MODEL_URL}"
+          echo "Download complete:"
+          ls -la /models/
+        fi
+      '
+    restart: "no"
+
+  # Server (HTTP only — gRPC not needed for OpenAI compat testing)
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.server
+      args:
+        LLAMA_VERSION: ${LLAMA_VERSION:?LLAMA_VERSION is required — set via env or use make}
+        GPU_VARIANT: ${GPU_VARIANT:-cpu}
+    image: llamacpp-server:${IMAGE_TAG:-openai-test}-${GPU_VARIANT:-cpu}
+    container_name: openai-test-server
+    volumes:
+      - model-data:/models:ro
+    environment:
+      - LD_LIBRARY_PATH=/app
+    command: ["--http-port", "8080", "--grpc-port", ""]
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/8080' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: "no"
+
+  # Python OpenAI SDK test client
+  openai-test:
+    build:
+      context: ..
+      dockerfile: tests/openai-compat/Dockerfile
+    image: llamacpp-openai-test:${IMAGE_TAG:-latest}
+    container_name: openai-test-client
+    depends_on:
+      server:
+        condition: service_healthy
+    environment:
+      - SERVER_URL=http://server:8080
+      - MODEL_PATH=/models/${MODEL_NAME:-SmolLM2-135M-Instruct-Q4_K_M.gguf}
+      - MAX_TOKENS=50
+    restart: "no"
+
+volumes:
+  model-data:
+    driver: local

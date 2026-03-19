@@ -26,6 +26,7 @@ type ModelState struct {
 type ModelManager interface {
 	LoadModel(path string, progress LoadModelProgressFunc) (interface{}, error)
 	GetModel(path string) (interface{}, error)
+	ListModels() []string
 	Stop()
 }
 
@@ -199,6 +200,18 @@ func (m *modelManager) GetModel(path string) (interface{}, error) {
 		return nil, ErrModelNotFound
 	}
 	return state.getModel()
+}
+
+func (m *modelManager) ListModels() []string {
+	m.Mx.Lock()
+	defer m.Mx.Unlock()
+	var paths []string
+	for path, state := range m.ModelStates {
+		if model, err := state.getModel(); model != nil && err == nil {
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
 func (m *modelManager) cancelLoads() []*ModelState {

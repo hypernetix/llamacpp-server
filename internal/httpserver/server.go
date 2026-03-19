@@ -29,6 +29,11 @@ func NewServer(service *llmservice.Service, addr string, logger logging.SprintfL
 	mux.HandleFunc("POST /models/load", s.handleLoadModel)
 	mux.HandleFunc("POST /completions", s.handleCompletions)
 
+	// OpenAI-compatible API (v1)
+	mux.HandleFunc("GET /v1/models", s.handleV1Models)
+	mux.HandleFunc("POST /v1/completions", s.handleV1Completions)
+	mux.HandleFunc("POST /v1/chat/completions", s.handleV1ChatCompletions)
+
 	s.httpServer = &http.Server{
 		Addr:    addr,
 		Handler: mux,
